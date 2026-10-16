@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    { "id": "complete", "query": "100 Example St, Testville 10001", "category": "complete", "countryRegion": "US", "expected": { "address": { "addressLine": "100 Example St", "locality": "Testville" }, "source": "Invented fixture oracle; not a real address" } },
+    { "id": "partial", "query": "100 Exam", "category": "partial", "countryRegion": "US", "expected": { "address": { "addressLine": "100 Example St" }, "source": "Invented fixture oracle; not a real address" } },
+    { "id": "typo", "query": "100 Exampel St Testvile", "category": "typo", "countryRegion": "US", "expected": { "address": { "addressLine": "100 Example St" }, "source": "Invented fixture oracle; not a real address" } },
+    { "id": "ambiguous", "query": "10 Main St", "category": "ambiguous", "countryRegion": "US", "expected": { "address": { "addressLine": "10 Main St", "locality": "East Example" }, "source": "Invented fixture oracle; not a real address" } },
+    { "id": "unit", "query": "100 Example St Unit 5", "category": "unit-detail", "countryRegion": "US", "expected": { "address": { "addressLine": "100 Example St Unit 5" }, "source": "Invented fixture oracle; unit-level correctness required" } },
+    { "id": "international", "query": "12 Rue de Demonstration", "category": "international", "countryRegion": "FR" },
+    { "id": "unlabelled", "query": "Missing postal code Example Road", "category": "missing-components", "countryRegion": "GB" },
+    { "id": "negative", "query": "ZZZ NONEXISTENT FIXTURE 999999", "category": "negative-control", "expected": { "noMatch": true, "source": "Invented negative fixture oracle; not an Azure assertion" } }
+  ]
+}

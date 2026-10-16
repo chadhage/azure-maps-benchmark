@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.copilot-azure/
+data/private/*
+!data/private/.gitkeep
+results/*
+!results/.gitkeep
+coverage/
+test-results/
+playwright-report/
+artifacts/
+infra/main.json
+*.zip
+*.log

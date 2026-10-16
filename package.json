@@ -1,0 +1,32 @@
+{
+  "name": "smbc-azure-maps-efficacy-poc",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reproducible, evidence-led evaluation of Azure Maps for challenging addresses.",
+  "engines": { "node": ">=22.21.0" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "demo": "node src/cli.js --input data/sample-addresses.json --mode fixture --out results/demo",
+    "evaluate": "node --env-file-if-exists=.env src/cli.js",
+    "test": "npm run test:unit && npm run test:bdd && npm run test:acceptance",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=public/modules/*.js --test-coverage-include=src/providers.js --test-coverage-include=src/experiment.js --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=75 test/unit/*.test.js",
+    "test:bdd": "cucumber-js --config cucumber.cjs",
+    "test:acceptance": "playwright test",
+    "check": "tsc -p jsconfig.json && eslint .",
+    "verify": "npm run check && npm run test:coverage && npm run test:bdd && npm run test:acceptance",
+    "infra:build": "az bicep build --file infra/main.bicep --stdout"
+  },
+  "dependencies": {
+    "@azure/identity": "4.13.1"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "12.2.0",
+    "@eslint/js": "9.39.1",
+    "@playwright/test": "1.56.1",
+    "@types/node": "22.18.0",
+    "eslint": "9.39.1",
+    "typescript": "5.9.3"
+  }
+}

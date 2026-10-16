@@ -1,0 +1,60 @@
+[
+  {
+    "id": "complete", "query": "100 Example St, Testville 10001", "strategy": "geocode",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73.98, 40.75] }, "properties": { "address": { "addressLine": "100 Example St", "locality": "Testville", "formattedAddress": "100 Example St, Testville 10001", "countryRegion": { "ISO": "US" } }, "confidence": "High", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  {
+    "id": "complete", "query": "100 Example St, Testville 10001", "strategy": "autocomplete",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73.98, 40.75] }, "properties": { "address": { "addressLine": "100 Example St", "locality": "Testville", "formattedAddress": "100 Example St, Testville 10001", "countryRegion": { "ISO": "US" } }, "confidence": "High", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  {
+    "id": "partial", "query": "100 Exam", "strategy": "geocode",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73.9, 40.7] }, "properties": { "address": { "locality": "Testville", "formattedAddress": "Testville" }, "confidence": "Medium", "matchCodes": ["UpHierarchy"], "type": "PopulatedPlace" } }] }
+  },
+  {
+    "id": "partial", "query": "100 Exam", "strategy": "autocomplete",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73.98, 40.75] }, "properties": { "address": { "addressLine": "100 Example St", "locality": "Testville", "formattedAddress": "100 Example St, Testville" }, "confidence": "High", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  {
+    "id": "typo", "query": "100 Exampel St Testvile", "strategy": "geocode",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73.98, 40.75] }, "properties": { "address": { "addressLine": "100 Example St", "formattedAddress": "100 Example St, Testville" }, "confidence": "Low", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  {
+    "id": "typo", "query": "100 Exampel St Testvile", "strategy": "autocomplete",
+    "response": { "type": "FeatureCollection", "features": [] }
+  },
+  {
+    "id": "ambiguous", "query": "10 Main St", "strategy": "geocode",
+    "response": { "type": "FeatureCollection", "features": [
+      { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-74, 41] }, "properties": { "address": { "addressLine": "10 Main St", "locality": "West Example", "formattedAddress": "10 Main St, West Example" }, "confidence": "High", "matchCodes": ["Ambiguous"], "type": "Address" } },
+      { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73, 41] }, "properties": { "address": { "addressLine": "10 Main St", "locality": "East Example", "formattedAddress": "10 Main St, East Example" }, "confidence": "High", "matchCodes": ["Ambiguous"], "type": "Address" } }
+    ] }
+  },
+  {
+    "id": "ambiguous", "query": "10 Main St", "strategy": "autocomplete",
+    "response": { "type": "FeatureCollection", "features": [
+      { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-74, 41] }, "properties": { "address": { "addressLine": "10 Main St", "locality": "West Example", "formattedAddress": "10 Main St, West Example" }, "confidence": "High", "matchCodes": ["Ambiguous"], "type": "Address" } },
+      { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73, 41] }, "properties": { "address": { "addressLine": "10 Main St", "locality": "East Example", "formattedAddress": "10 Main St, East Example" }, "confidence": "High", "matchCodes": ["Ambiguous"], "type": "Address" } }
+    ] }
+  },
+  {
+    "id": "unit", "query": "100 Example St Unit 5", "strategy": "geocode",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73.98, 40.75] }, "properties": { "address": { "addressLine": "100 Example St", "formattedAddress": "100 Example St, Testville" }, "confidence": "High", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  {
+    "id": "unit", "query": "100 Example St Unit 5", "strategy": "autocomplete",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [-73.98, 40.75] }, "properties": { "address": { "addressLine": "100 Example St", "formattedAddress": "100 Example St, Testville" }, "confidence": "High", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  {
+    "id": "international", "query": "12 Rue de Demonstration", "strategy": "geocode",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [2.35, 48.85] }, "properties": { "address": { "addressLine": "12 Rue de Demonstration", "formattedAddress": "12 Rue de Demonstration, Ville Exemple", "countryRegion": { "ISO": "FR" } }, "confidence": "Medium", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  {
+    "id": "international", "query": "12 Rue de Demonstration", "strategy": "autocomplete",
+    "response": { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Point", "coordinates": [2.35, 48.85] }, "properties": { "address": { "addressLine": "12 Rue de Demonstration", "formattedAddress": "12 Rue de Demonstration, Ville Exemple", "countryRegion": { "ISO": "FR" } }, "confidence": "Medium", "matchCodes": ["Good"], "type": "Address" } }] }
+  },
+  { "id": "unlabelled", "query": "Missing postal code Example Road", "strategy": "geocode", "response": { "type": "FeatureCollection", "features": [] } },
+  { "id": "unlabelled", "query": "Missing postal code Example Road", "strategy": "autocomplete", "response": { "type": "FeatureCollection", "features": [] } },
+  { "id": "negative", "query": "ZZZ NONEXISTENT FIXTURE 999999", "strategy": "geocode", "response": { "type": "FeatureCollection", "features": [] } },
+  { "id": "negative", "query": "ZZZ NONEXISTENT FIXTURE 999999", "strategy": "autocomplete", "response": { "type": "FeatureCollection", "features": [] } }
+]

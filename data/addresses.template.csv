@@ -1,0 +1,2 @@
+id,query,category,countryRegion,longitude,latitude,expectedAddressLine,expectedLocality,expectedAdminDistrict,expectedPostalCode,expectedCountryRegion,expectedLongitude,expectedLatitude,toleranceMeters,truthSource,expectedNoMatch
+your-unlabelled-case,"Replace with an approved input address",partial,US,,,,,,,,,,,,
