@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateCandidates, summarize, reviewResult, distanceMeters, normalizeText } from '../../public/modules/evaluation.js';
+import { evaluateCandidates, summarize, reviewResult, distanceMeters, normalizeText, categoryStrategyMetrics } from '../../public/modules/evaluation.js';
 import { addressCase, candidate } from '../helpers.js';
 
 function result(input, candidates, overrides = {}) {
@@ -81,6 +81,19 @@ test('latency percentiles are nearest-rank and never interpolate a fictitious ob
   assert.equal(metrics.latency.p95Ms, 50);
 });
 
+test('category breakdown preserves strategy differences and omits nonexistent combinations', () => {
+  const rows = [
+    result(addressCase(), [candidate()]),
+    result(addressCase(), [], { strategy: 'autocomplete' }),
+    result(addressCase({ id: 'other', category: 'typo' }), [candidate()])
+  ];
+  const groups = categoryStrategyMetrics(rows);
+  assert.equal(groups.length, 3);
+  assert.equal(groups.find(group => group.category === 'partial' && group.strategy === 'geocode').metrics.top1Accuracy, 1);
+  assert.equal(groups.find(group => group.category === 'partial' && group.strategy === 'autocomplete').metrics.top1Accuracy, 0);
+  assert.deepEqual(categoryStrategyMetrics([]), []);
+});
+
 test('manual decisions are separate from automated correctness and require an audit identity', () => {
   const row = result(addressCase({ expected: undefined }), [candidate()]);
   const reviewed = reviewResult(row, { decision: 'accepted', reviewer: 'Analyst A', note: 'Checked independently' });
@@ -88,6 +101,11 @@ test('manual decisions are separate from automated correctness and require an au
   assert.equal(row.review, undefined);
   assert.equal(summarize([reviewed]).top1Accuracy, null);
   assert.equal(summarize([reviewed]).manualAcceptanceRate, 1);
+  const corrected = reviewResult(reviewed, { decision: 'rejected', reviewer: 'Analyst B', note: 'Second review' });
+  assert.equal(corrected.reviewHistory.length, 2);
+  assert.equal(corrected.reviewHistory[0].decision, 'accepted');
+  assert.equal(corrected.reviewHistory[1].decision, 'rejected');
+  assert.equal(reviewed.reviewHistory.length, 1);
   assert.throws(() => reviewResult(row, { decision: 'accepted', reviewer: '' }), /reviewer/);
   assert.throws(() => reviewResult(row, { decision: 'maybe', reviewer: 'A' }), /decision/);
   assert.throws(() => reviewResult({ ...row, status: 'error' }, { decision: 'accepted', reviewer: 'A' }), /error/);

@@ -44,7 +44,7 @@ export async function runExperiment(input, provider, settings = {}, signal) {
         results[index] = {
           case: row, strategy, status: 'error', candidates: [],
           attempts, retryDelayMs, durationMs: performance.now() - started,
-          evaluation: evaluateCandidates(row, []),
+          evaluation: { ...evaluateCandidates(row, []), ...(row.expected ? { top1Correct: false, topKCorrect: false } : {}) },
           error: { code, message: error instanceof PocError ? error.message : 'Azure Maps request failed.' }
         };
       }

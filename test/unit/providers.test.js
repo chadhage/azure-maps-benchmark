@@ -123,3 +123,46 @@ test('fixture mode is deterministic and never guesses results for unseen inputs'
   await assert.rejects(provider.search({ ...row, query: 'changed' }, request), /fixture/i);
   await assert.rejects(provider.search(row, { ...request, strategy: 'autocomplete' }), /fixture/i);
 });
+
+test('an actual fetch deadline aborts and is classified as timeout after three attempts', async () => {
+  const provider = createAzureProvider({
+    clientId: 'id', getToken: async () => 'token', timeoutMs: 5,
+    fetchImpl: async (_url, init) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => resolve(response()), 1000);
+      init.signal.addEventListener('abort', () => {
+        clearTimeout(timer);
+        reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+      }, { once: true });
+    }),
+    sleep: async () => {}
+  });
+  await assert.rejects(provider.search(addressCase(), request), error => error.code === 'TIMEOUT' && error.attempts === 3);
+});
+
+test('server errors retry with bounded backoff but token failures do not issue HTTP requests', async () => {
+  let count = 0;
+  const waits = [];
+  const provider = createAzureProvider({
+    clientId: 'id', getToken: async () => 'token',
+    fetchImpl: async () => ++count === 1 ? new Response('', { status: 503 }) : response(),
+    sleep: async ms => { waits.push(ms); }, random: () => 0
+  });
+  assert.equal((await provider.search(addressCase(), request)).attempts, 2);
+  assert.deepEqual(waits, [250]);
+  const unauthenticated = createAzureProvider({
+    clientId: 'id', getToken: async () => { throw new Error('private authentication detail'); },
+    fetchImpl: async () => { assert.fail('No HTTP call without a token'); }
+  });
+  await assert.rejects(unauthenticated.search(addressCase(), request), error => error.code === 'TOKEN_UNAVAILABLE' && !error.message.includes('private'));
+  assert.throws(() => createAzureProvider({ clientId: '', getToken: async () => 't' }), /CLIENT_ID/);
+});
+
+test('cancellation during retry backoff stays an explicit cancellation, not an empty result', async () => {
+  const controller = new AbortController();
+  const provider = createAzureProvider({
+    clientId: 'id', getToken: async () => 'token',
+    fetchImpl: async () => new Response('', { status: 429 }),
+    sleep: async () => { controller.abort(); throw new Error('sleep aborted'); }
+  });
+  await assert.rejects(provider.search(addressCase(), { ...request, signal: controller.signal }), error => error.code === 'CANCELLED' && error.attempts === 1);
+});

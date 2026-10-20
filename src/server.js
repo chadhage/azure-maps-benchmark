@@ -7,19 +7,23 @@ import { loadFixtures, liveProvider } from './runtime.js';
 import { runExperiment } from './experiment.js';
 import { PocError, isObject } from '../public/modules/errors.js';
 import { MAX_CASES } from '../public/modules/dataset.js';
+import { createAttemptBudget } from './attempt-budget.js';
 
+/** @type {Map<string,[string,string]>} */
 const FILES = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
   ['/styles.css', ['styles.css', 'text/css; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
-  ['/favicon.svg', ['favicon.svg', 'image/svg+xml']],
-  ...['contracts', 'dataset', 'evaluation', 'errors', 'reports'].map(name => [`/modules/${name}.js`, [`modules/${name}.js`, 'text/javascript; charset=utf-8']])
+  ['/favicon.svg', ['favicon.svg', 'image/svg+xml']]
 ]);
+for (const name of ['contracts', 'dataset', 'evaluation', 'errors', 'reports', 'theme']) {
+  FILES.set(`/modules/${name}.js`, [`modules/${name}.js`, 'text/javascript; charset=utf-8']);
+}
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'no-referrer',
+  'Referrer-Policy': 'same-origin',
   'Cache-Control': 'no-store',
   'Permissions-Policy': 'geolocation=(), camera=(), microphone=()'
 };
@@ -32,14 +36,39 @@ function json(res, status, body) {
 
 /** @param {http.IncomingMessage} req */
 async function readBody(req) {
-  let size = 0;
-  const chunks = [];
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > 1048576) throw new PocError('BODY_TOO_LARGE', 'Request exceeds the 1 MiB limit.', 413);
-    chunks.push(chunk);
+  if (Number(req.headers['content-length'] ?? 0) > 1048576) {
+    req.resume();
+    throw new PocError('BODY_TOO_LARGE', 'Request exceeds the 1 MiB limit.', 413);
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  const content = await new Promise((resolve, reject) => {
+    let size = 0;
+    /** @type {Buffer[]} */
+    const chunks = [];
+    function cleanup() {
+      req.off('data', onData);
+      req.off('end', onEnd);
+      req.off('error', onError);
+      req.off('aborted', onAborted);
+    }
+    /** @param {Buffer} chunk */
+    function onData(chunk) {
+      size += chunk.length;
+      if (size > 1048576) {
+        cleanup();
+        req.resume();
+        reject(new PocError('BODY_TOO_LARGE', 'Request exceeds the 1 MiB limit.', 413));
+      } else chunks.push(chunk);
+    }
+    function onEnd() { cleanup(); resolve(Buffer.concat(chunks).toString('utf8')); }
+    /** @param {Error} error */
+    function onError(error) { cleanup(); reject(error); }
+    function onAborted() { cleanup(); reject(new PocError('CANCELLED', 'Request body was interrupted.', 499)); }
+    req.on('data', onData);
+    req.once('end', onEnd);
+    req.once('error', onError);
+    req.once('aborted', onAborted);
+  });
+  try { return JSON.parse(content); }
   catch (error) {
     if (!(error instanceof SyntaxError)) throw error;
     throw new PocError('INVALID_JSON', 'Request body must be valid JSON.');
@@ -54,21 +83,22 @@ export async function createApp(dependencies = {}) {
   const fixtureProvider = dependencies.fixtureProvider ?? await loadFixtures();
   let active = false;
   let live = dependencies.liveProvider;
+  const attemptBudget = config.attemptLimit > 0 ? await createAttemptBudget(config.attemptLimit, config.attemptLedgerPath) : null;
   const server = http.createServer((req, res) => {
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
     const requestId = randomUUID();
     res.setHeader('X-Request-Id', requestId);
     async function handle() {
+      const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+      if (req.method === 'GET' && path === '/healthz') return json(res, 200, { status: 'ok', service: 'azure-maps-poc', mapsConnectivity: 'not-checked' });
       const host = req.headers.host ?? '';
       let hostname;
       try { hostname = new URL(`http://${host}`).hostname; }
       catch (_error) { throw new PocError('INVALID_HOST', 'Invalid host header.', 400); }
       const allowedHosts = config.platformHosted ? [config.hostname] : ['127.0.0.1', 'localhost', '[::1]'];
       if (!allowedHosts.includes(hostname)) throw new PocError('INVALID_HOST', 'Host is not allowed.', 403);
-      const path = new URL(req.url ?? '/', 'http://localhost').pathname;
       if (path !== '/healthz' && config.requirePlatformAuth && !req.headers['x-ms-client-principal-id']) throw new PocError('AUTHENTICATION_REQUIRED', 'Sign in through the App Service authentication endpoint.', 401);
-      if (req.method === 'GET' && path === '/healthz') return json(res, 200, { status: 'ok', service: 'azure-maps-poc', mapsConnectivity: 'not-checked' });
-      if (req.method === 'GET' && path === '/api/config') return json(res, 200, { liveEnabled: config.enableLive, maxCases: MAX_CASES, maxBytes: 1048576, maxAttempts: 3, apiVersion: '2026-01-01', geography: config.geography });
+      if (req.method === 'GET' && path === '/api/config') return json(res, 200, { liveEnabled: config.enableLive, attemptBudget: attemptBudget?.snapshot() ?? null, maxCases: MAX_CASES, maxBytes: 1048576, maxAttempts: 3, apiVersion: '2026-01-01', geography: config.geography });
       if (req.method === 'GET' && path === '/api/sample') {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(await readFile(new URL('../data/sample-addresses.json', import.meta.url)));
@@ -87,7 +117,7 @@ export async function createApp(dependencies = {}) {
         const abort = new AbortController();
         res.once('close', () => { if (!res.writableEnded) abort.abort(); });
         try {
-          if (body.mode === 'live' && !live) live = await liveProvider(config);
+          if (body.mode === 'live' && !live) live = await liveProvider(config, attemptBudget?.reserve);
           const provider = body.mode === 'live' ? live : fixtureProvider;
           if (!provider) throw new Error('Live provider was not initialized.');
           const report = await runExperiment(body.dataset, provider, body.options, AbortSignal.any([abort.signal, AbortSignal.timeout(120000)]));

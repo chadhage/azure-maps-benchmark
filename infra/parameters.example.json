@@ -2,13 +2,14 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "location": { "value": "eastus2" },
+    "location": { "value": "centralus" },
     "webAppName": { "value": "REPLACE_WITH_APPROVED_UNIQUE_NAME" },
     "entraApplicationClientId": { "value": "REPLACE_WITH_SINGLE_TENANT_WEB_APP_CLIENT_ID" },
     "allowedEntraGroupObjectId": { "value": "REPLACE_WITH_AUTHORIZED_GROUP_OBJECT_ID" },
     "authKeyVaultName": { "value": "REPLACE_WITH_EXISTING_VAULT_IN_TARGET_RG" },
     "authSecretName": { "value": "REPLACE_WITH_EXISTING_ENTRA_CLIENT_SECRET_NAME" },
     "mapsGeography": { "value": "global" },
-    "enableLive": { "value": false }
+    "enableLive": { "value": false },
+    "budgetAlertEmails": { "value": ["REPLACE_WITH_BUDGET_ALERT_EMAIL"] }
   }
 }

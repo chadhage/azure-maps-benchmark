@@ -190,6 +190,16 @@ function parseCsv(source) {
   });
 }
 
+/** @param {string} source @returns {AddressCase[]} */
+export function parseAddressCsv(source) {
+  if (typeof source !== 'string' || new TextEncoder().encode(source).length > 1048576) invalid('CSV must be at most 1 MiB.');
+  const rows = csvRows(source);
+  return validateDataset(rows.map((cells, index) => {
+    if (cells.length !== 1) invalid(`CSV row ${index + 1} must contain exactly one field. Quote addresses containing commas. Do not include a header.`);
+    return { id: `demo-${index + 1}`, query: cells[0], category: 'demo' };
+  }));
+}
+
 /** @param {string} source @param {'json'|'csv'} [format] @returns {AddressCase[]} */
 export function parseDataset(source, format = 'json') {
   if (typeof source !== 'string' || source.length > 1048576) invalid('dataset text must be at most 1 MiB.');

@@ -91,7 +91,7 @@ export function normalizeResponse(payload) {
 }
 
 /**
- * @param {{clientId:string,geography?:string,getToken:(signal?:AbortSignal)=>Promise<string>,fetchImpl?:typeof fetch,sleep?:(ms:number,signal?:AbortSignal)=>Promise<void>,random?:()=>number,timeoutMs?:number}} config
+ * @param {{clientId:string,geography?:string,getToken:(signal?:AbortSignal)=>Promise<string>,reserveAttempt?:()=>Promise<void>,fetchImpl?:typeof fetch,sleep?:(ms:number,signal?:AbortSignal)=>Promise<void>,random?:()=>number,timeoutMs?:number}} config
  * @returns {Provider}
  */
 export function createAzureProvider(config) {
@@ -117,6 +117,11 @@ export function createAzureProvider(config) {
           throw new PocError('TOKEN_UNAVAILABLE', 'Microsoft Entra token unavailable. Check Azure login or managed identity and Maps RBAC.', 503, attempt - 1, retryDelayMs);
         }
         if (!token) throw new PocError('TOKEN_UNAVAILABLE', 'Microsoft Entra returned no access token.', 503, attempt - 1, retryDelayMs);
+        try { await config.reserveAttempt?.(); }
+        catch (error) {
+          if (!(error instanceof PocError)) throw error;
+          throw new PocError(error.code, error.message, error.status, attempt - 1, retryDelayMs);
+        }
         /** @type {Response|undefined} */
         let response;
         /** @type {PocError|undefined} */
@@ -160,7 +165,11 @@ export function createAzureProvider(config) {
         const retryMs = response?.headers.get('x-ms-retry-after-ms');
         if (retryMs && Number.isFinite(Number(retryMs))) wait = Math.max(wait, Number(retryMs));
         if (retryDelayMs + wait > 30000) throw new PocError('RETRY_BUDGET_EXCEEDED', 'Azure Maps requested a retry delay beyond the 30-second budget. Retry this case later.', 503, attempt, retryDelayMs);
-        await sleep(wait, options.signal);
+        try { await sleep(wait, options.signal); }
+        catch (error) {
+          if (!options.signal?.aborted) throw error;
+          throw new PocError('CANCELLED', 'Evaluation was cancelled during retry backoff.', 499, attempt, retryDelayMs);
+        }
         retryDelayMs += wait;
       }
       throw new Error('Unreachable retry state.');

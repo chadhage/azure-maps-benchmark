@@ -6,6 +6,9 @@ param(
     [switch]$Apply
 )
 $ErrorActionPreference = 'Stop'
+if ($Apply) {
+    throw 'Local deployments are disabled. Push to main or open a same-repository PR and use the Verify and deploy GitHub Actions workflow.'
+}
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $parameters = (Resolve-Path $ParameterFile).Path
 $values = (Get-Content -Raw -LiteralPath $parameters | ConvertFrom-Json -AsHashtable).parameters
@@ -13,6 +16,10 @@ foreach ($name in @('webAppName', 'entraApplicationClientId', 'allowedEntraGroup
     if (-not $values[$name].value -or $values[$name].value -match '^REPLACE') {
         throw "Set the approved value for $name in the parameter file."
     }
+}
+$budgetAlertEmails = @($values.budgetAlertEmails.value)
+if (-not $budgetAlertEmails.Count -or $budgetAlertEmails -contains 'REPLACE_WITH_BUDGET_ALERT_EMAIL') {
+    throw 'Set at least one budget alert recipient in the parameter file.'
 }
 $current = & az account show --query id --output tsv
 if ($LASTEXITCODE -ne 0) { throw 'Sign in with az login before running deployment validation.' }
@@ -32,35 +39,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Bicep compilation failed.' }
 Write-Host "Subscription: $SubscriptionId`nResource group: $ResourceGroupName`nRegion: $($values.location.value)`nLive enabled: $($values.enableLive.value)"
 & az deployment group what-if --resource-group $ResourceGroupName --template-file $template --parameters "@$parameters"
 if ($LASTEXITCODE -ne 0) { throw 'Azure what-if validation failed.' }
-if (-not $Apply) {
-    Write-Host 'Validation only. No resources were provisioned. Use -Apply after approval.'
-    return
-}
-if (-not $PSCmdlet.ShouldProcess("$SubscriptionId / $ResourceGroupName", 'Provision the approved POC and deploy its application code')) { return }
-$name = "maps-poc-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))"
-$deploymentJson = & az deployment group create --name $name --resource-group $ResourceGroupName --template-file $template --parameters "@$parameters" --output json
-if ($LASTEXITCODE -ne 0) { throw 'Infrastructure deployment failed.' }
-$outputs = ($deploymentJson | ConvertFrom-Json).properties.outputs
-$archive = & (Join-Path $PSScriptRoot 'package.ps1')
-& az webapp deploy --resource-group $ResourceGroupName --name $values.webAppName.value --src-path $archive --type zip --async false
-if ($LASTEXITCODE -ne 0) { throw 'Application deployment failed. Inspect App Service build logs.' }
-$healthUrl = "$($outputs.siteUrl.value)/healthz"
-$healthy = $false
-for ($attempt = 1; $attempt -le 12; $attempt++) {
-    try {
-        $response = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 15
-        if ($response.status -eq 'ok') { $healthy = $true; break }
-        Write-Warning 'Health endpoint returned an unexpected payload.'
-    }
-    catch [System.Net.Http.HttpRequestException] {
-        Write-Warning "Health probe $attempt failed: $($_.Exception.Message)"
-    }
-    catch [System.Threading.Tasks.TaskCanceledException] {
-        Write-Warning "Health probe $attempt timed out."
-    }
-    Start-Sleep -Seconds 10
-}
-if (-not $healthy) { throw 'The deployed application did not become responsive. Maps connectivity and Entra sign-in are not yet verified.' }
-Write-Host "Application responsive: $($outputs.siteUrl.value)"
-Write-Host 'Next: verify Entra group access and denied access, Key Vault resolution, and an explicitly approved live Maps case. Health alone does not verify these.'
-Write-Host "Deployment record: $name. Preserve its outputs for targeted cleanup; do not delete the existing Key Vault or its resource group."
+Write-Host 'Validation only. No resources were provisioned. Application deployment is GitHub Actions only.'

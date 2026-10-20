@@ -1,5 +1,5 @@
-import { parseDataset, validateOptions } from './modules/dataset.js';
-import { summarize, summarizeGroups, reviewResult } from './modules/evaluation.js';
+import { parseDataset, parseAddressCsv, validateDataset, validateOptions } from './modules/dataset.js';
+import { summarize, summarizeGroups, reviewResult, categoryStrategyMetrics } from './modules/evaluation.js';
 import { exportReport, renderHtmlReport, renderMarkdownReport, resultsCsv, percent } from './modules/reports.js';
 import { PocError, isObject } from './modules/errors.js';
 
@@ -71,11 +71,19 @@ window.addEventListener('hashchange', navigate);
 /** @param {string} path @param {RequestInit} [init] @returns {Promise<unknown>} */
 async function api(path, init) {
   const response = await fetch(path, init);
-  const body = await response.json();
+  const content = await response.text();
+  let body;
+  try { body = content ? JSON.parse(content) : null; }
+  catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    if (response.ok) throw new PocError('INVALID_RESPONSE', 'Server returned an invalid JSON response.');
+  }
   if (!response.ok) {
     const error = isObject(body) && isObject(body.error) ? body.error : {};
-    throw new PocError(typeof error.code === 'string' ? error.code : 'REQUEST_FAILED', typeof error.message === 'string' ? error.message : `Server returned HTTP ${response.status}.`);
+    const guidance = response.status === 401 || response.status === 403 ? ' Refresh the hosted page and sign in again. If this persists, ask the owner to check App Service authentication and same-origin POST settings.' : '';
+    throw new PocError(typeof error.code === 'string' ? error.code : 'REQUEST_FAILED', typeof error.message === 'string' ? error.message : `Server returned HTTP ${response.status}.${guidance}`);
   }
+  if (body === null) throw new PocError('INVALID_RESPONSE', 'Server returned an empty JSON response.');
   return body;
 }
 
@@ -114,15 +122,18 @@ async function loadSample() {
   validate();
 }
 
-async function run() {
+/** @param {import('./modules/contracts.js').AddressCase[]} [demoCases] */
+async function run(demoCases) {
   if (controller) throw new PocError('RUN_IN_PROGRESS', 'An evaluation is already running.');
-  const cases = validate();
-  const settings = options();
-  const mode = select('mode').value;
-  if (mode === 'live' && (!liveEnabled || !input('live-consent').checked)) throw new PocError('LIVE_CONSENT_REQUIRED', 'Live mode requires server configuration and explicit data-submission consent.');
+  const cases = demoCases ?? validate();
+  const settings = demoCases ? validateOptions({ strategies: ['geocode'], top: 5, concurrency: 1 }) : options();
+  const mode = demoCases ? 'live' : select('mode').value;
+  const consent = input(demoCases ? 'demo-consent' : 'live-consent').checked;
+  if (mode === 'live' && (!liveEnabled || !consent)) throw new PocError('LIVE_CONSENT_REQUIRED', 'Live mode requires server configuration and explicit data-submission consent.');
   controller = new AbortController();
   const button = element('run-button', HTMLButtonElement);
   button.disabled = true;
+  element('demo-run', HTMLButtonElement).disabled = true;
   button.textContent = 'Evaluating...';
   el('cancel-button').hidden = false;
   notify(`Evaluating ${cases.length} cases with ${settings.strategies.length} strategies. ${mode === 'fixture' ? 'No Azure calls will be made.' : 'Approved queries are being sent to Azure Maps.'}`);
@@ -130,7 +141,7 @@ async function run() {
     const body = await api('/api/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
-      body: JSON.stringify({ mode, dataset: cases, options: settings, liveConsent: input('live-consent').checked })
+      body: JSON.stringify({ mode, dataset: cases, options: settings, liveConsent: consent })
     });
     // This response comes only from the same-origin application, not imported report files.
     if (!isObject(body) || body.schemaVersion !== '1.0' || !Array.isArray(body.results)) throw new PocError('INVALID_REPORT', 'The backend returned an invalid report.');
@@ -138,12 +149,14 @@ async function run() {
     renderReport();
     location.hash = 'findings';
     notify(`${report.overall.total} observations completed; ${report.overall.errors} request errors. Export before reloading to preserve evidence.`);
+    return report;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') notify('Evaluation cancelled. Already submitted Azure calls may still be billed; no complete report was saved.');
     else throw error;
   } finally {
     controller = null;
     button.disabled = false;
+    element('demo-run', HTMLButtonElement).disabled = !liveEnabled;
     button.textContent = 'Run evaluation \u2192';
     el('cancel-button').hidden = true;
   }
@@ -161,7 +174,7 @@ function renderReport() {
   const overall = report.overall;
   el('nav-count').textContent = String(overall.total);
   el('hero-cases').textContent = String(report.provenance.caseCount);
-  el('hero-evidence').textContent = report.provenance.mode === 'fixture' ? 'Simulated fixtures only. No Azure or SMBC efficacy conclusion.' : 'Live observations collected. Review independent truth and failure categories.';
+  el('hero-evidence').textContent = report.provenance.mode === 'fixture' ? 'Simulated fixtures only. No Azure or Zava efficacy conclusion.' : 'Live observations collected. Review independent truth and failure categories.';
   el('evidence-banner').textContent = `${report.provenance.evidence}. ${report.provenance.mode === 'fixture' ? 'These results are manufactured to demonstrate the evaluation; they are not evidence of Azure performance.' : 'These observations describe this dataset and configuration only; they do not establish population efficacy.'}`;
   el('evidence-banner').className = `evidence-banner${report.provenance.mode === 'live' ? ' live' : ''}`;
   el('metric-coverage').textContent = percent(overall.coverage);
@@ -183,6 +196,17 @@ function renderReport() {
       `${metrics.errors} / ${metrics.total}`, `${metrics.manualAccepted} / ${metrics.manualReviewed}`
     ]) row.append(node('td', value));
     strategyRows.append(row);
+  }
+  const categoryRows = el('category-rows');
+  categoryRows.replaceChildren();
+  for (const { category, strategy, metrics } of categoryStrategyMetrics(report.results ?? [])) {
+    const row = node('tr');
+    for (const value of [
+      category, strategy, String(metrics.total), String(metrics.labelled),
+      percent(metrics.coverage), percent(metrics.top1Accuracy), percent(metrics.topKAccuracy),
+      `${metrics.errors} / ${metrics.total}`
+    ]) row.append(node('td', value));
+    categoryRows.append(row);
   }
   const categoryFilter = select('category-filter');
   const previous = categoryFilter.value;
@@ -242,6 +266,11 @@ function openCase(index) {
     card.append(node('h3', `#${candidate.rank} ${candidate.formattedAddress || 'Address text not supplied'}`));
     card.append(node('p', `Confidence: ${candidate.confidence ?? 'not supplied'} / Match codes: ${candidate.matchCodes.join(', ') || 'not supplied'} / Type: ${candidate.entityType ?? 'not supplied'}`));
     card.append(node('p', `Coordinates [longitude, latitude]: ${candidate.position?.join(', ') ?? 'not supplied'} / Method: ${candidate.calculationMethod ?? 'not supplied'}`));
+    const fields = node('dl');
+    for (const [name, label] of [['addressLine', 'Address line'], ['locality', 'Locality'], ['adminDistrict', 'State / district'], ['postalCode', 'Postal code'], ['countryRegion', 'Country / region']]) {
+      fields.append(node('dt', label), node('dd', candidate.address[/** @type {keyof import('./modules/contracts.js').Address} */ (name)] ?? 'Not supplied by API'));
+    }
+    card.append(fields);
     const comparison = result.evaluation.comparisons[candidate.rank - 1];
     card.append(node('small', comparison ? `Truth comparison: ${comparison.correct ? 'correct' : 'incorrect'} / ${JSON.stringify(comparison.fields)}${comparison.distanceMeters !== null ? ` / ${comparison.distanceMeters.toFixed(1)} m from expected` : ''}` : 'No candidate-level independent truth comparison'));
     details.append(card);
@@ -300,8 +329,50 @@ el('try-demo').addEventListener('click', () => perform(demo));
 el('findings-demo').addEventListener('click', () => perform(demo));
 el('load-sample').addEventListener('click', () => perform(loadSample));
 el('validate-data').addEventListener('click', () => perform(() => { validate(); notify('Dataset is valid. No provider requests were made.'); }));
-el('run-form').addEventListener('submit', event => { event.preventDefault(); perform(run); });
-el('review-form').addEventListener('submit', event => { event.preventDefault(); perform(saveReview); });
+el('run-form').addEventListener('submit', event => { event.preventDefault(); perform(async () => { await run(); }); });
+select('demo-kind').addEventListener('change', () => {
+  const batch = select('demo-kind').value === 'batch';
+  el('demo-single-panel').hidden = batch;
+  el('demo-batch-panel').hidden = !batch;
+  el('demo-run').textContent = batch ? 'Resolve batch' : 'Resolve location';
+});
+el('demo-form').addEventListener('submit', event => {
+  event.preventDefault();
+  perform(async () => {
+    try {
+      let cases;
+      const batch = select('demo-kind').value === 'batch';
+      if (batch) {
+        const file = input('demo-file').files?.[0];
+        if (!file || !file.name.toLowerCase().endsWith('.csv')) throw new PocError('INVALID_FORMAT', 'Choose an address-only CSV file.');
+        if (file.size > 1048576) throw new PocError('FILE_TOO_LARGE', 'File exceeds the 1 MiB limit.');
+        cases = parseAddressCsv(await file.text());
+      } else cases = validateDataset([{ id: 'demo-1', query: input('demo-query').value, category: 'demo' }]);
+      el('demo-status').textContent = `Running demo ${batch ? '1b' : '1a'}: ${cases.length} location(s).`;
+      const completed = await run(cases);
+      if (!completed?.results) throw new PocError('NO_REPORT', 'No completed demo report was received. It may have been cancelled.');
+      const resolved = completed.results.filter(row => row.status !== 'error' && row.candidates.length > 0).length;
+      const errors = completed.overall.errors;
+      const message = `Demo ${batch ? '1b' : '1a'} response received: ${resolved} with candidates, ${cases.length - resolved - errors} no-match, ${errors} errors. Inspect case details for API address fields; this is not a correctness verdict.`;
+      el('demo-status').textContent = message;
+      notify(message, errors > 0);
+      await refreshDemoAvailability();
+    } catch (error) {
+      el('demo-status').textContent = error instanceof Error ? error.message : 'Demo failed.';
+      throw error;
+    }
+  });
+});
+el('review-form').addEventListener('submit', event => {
+  event.preventDefault();
+  perform(() => {
+    try { saveReview(); }
+    catch (error) {
+      if (error instanceof PocError) el('review-status').textContent = error.message;
+      throw error;
+    }
+  });
+});
 el('cancel-button').addEventListener('click', () => controller?.abort());
 el('close-dialog').addEventListener('click', () => dialog.close());
 el('export-button').addEventListener('click', () => perform(download));
@@ -327,15 +398,22 @@ input('dataset-file').addEventListener('change', () => perform(async () => {
   validate();
 }));
 
-perform(async () => {
-  navigate();
+async function refreshDemoAvailability() {
   const config = await api('/api/config');
   if (!isObject(config) || typeof config.liveEnabled !== 'boolean') throw new PocError('INVALID_CONFIG', 'Server configuration could not be read.');
   liveEnabled = config.liveEnabled;
+  const allowance = isObject(config.attemptBudget) ? ` Shared allowance: ${String(config.attemptBudget.remaining)} of ${String(config.attemptBudget.limit)} HTTP attempts remaining (retries count).` : '';
+  el('demo-availability').textContent = liveEnabled ? `Live Azure Maps available.${allowance}` : 'Live Azure Maps is not configured. Demo buttons stay disabled; fixture results are not a live demo.';
+  element('demo-run', HTMLButtonElement).disabled = !liveEnabled || controller !== null || (isObject(config.attemptBudget) && config.attemptBudget.remaining === 0);
   el('environment-label').textContent = liveEnabled ? 'Live available / opt-in' : 'Offline / fixtures';
   const option = select('mode').options[1];
   option.disabled = !liveEnabled;
   option.textContent = liveEnabled ? 'Live Azure Maps / consent required' : 'Live Azure Maps / disabled on server';
   if (liveEnabled) el('live-guidance').textContent = `Live is configured for ${String(config.geography)} geography, API ${String(config.apiVersion)}. Confirm data-owner approval and consent before running.`;
+}
+
+perform(async () => {
+  navigate();
+  await refreshDemoAvailability();
   await loadSample();
 });

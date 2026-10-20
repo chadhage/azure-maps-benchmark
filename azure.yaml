@@ -1,0 +1,24 @@
+name: zava-azure-maps-pilot
+infra:
+  provider: bicep
+  path: infra/azd
+hooks:
+  preprovision:
+    shell: pwsh
+    run: throw 'Local provisioning is disabled. Infrastructure changes require a separately reviewed GitHub Actions workflow.'
+    interactive: false
+services:
+  web:
+    project: .
+    language: js
+    host: appservice
+    dist: artifacts/azd-app
+    hooks:
+      predeploy:
+        shell: pwsh
+        run: throw 'Application deployment is GitHub Actions only. Push to main or open a same-repository PR.'
+        interactive: false
+      prepackage:
+        shell: pwsh
+        run: ./scripts/package-azd.ps1
+        interactive: false

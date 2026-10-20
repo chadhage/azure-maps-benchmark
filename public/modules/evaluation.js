@@ -97,6 +97,7 @@ export function reviewResult(row, input) {
   if ((input.note?.length ?? 0) > 1000) throw new PocError('INVALID_REVIEW', 'Review note must be at most 1000 characters.');
   if (input.decision === 'accepted' && (row.status === 'error' || row.candidates.length === 0)) throw new PocError('INVALID_REVIEW', 'An error or no-candidate result cannot be accepted as a match.');
   const decision = input.decision === 'accepted' ? 'accepted' : input.decision === 'rejected' ? 'rejected' : 'unresolved';
+  /** @type {import('./contracts.js').Review} */
   const review = { decision, reviewer: input.reviewer.trim(), note: input.note?.trim() ?? '', reviewedAt: new Date().toISOString() };
   return { ...row, review, reviewHistory: [...(row.reviewHistory ?? []), review] };
 }
@@ -112,4 +113,14 @@ export function summarizeGroups(results, key) {
     groups.set(name, group);
   }
   return Object.fromEntries([...groups].map(([name, rows]) => [name, summarize(rows)]));
+}
+
+/** @param {Result[]} results */
+export function categoryStrategyMetrics(results) {
+  const categories = [...new Set(results.map(row => row.case.category))];
+  const strategies = [...new Set(results.map(row => row.strategy))];
+  return categories.flatMap(category => strategies.map(strategy => ({
+    category, strategy,
+    metrics: summarize(results.filter(row => row.case.category === category && row.strategy === strategy))
+  }))).filter(group => group.metrics.total > 0);
 }

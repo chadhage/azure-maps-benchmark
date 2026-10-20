@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDataset, validateDataset, validateOptions } from '../../public/modules/dataset.js';
+import { parseDataset, parseAddressCsv, validateDataset, validateOptions } from '../../public/modules/dataset.js';
 import { addressCase } from '../helpers.js';
 
 test('JSON arrays and versioned envelopes share one validated contract', () => {
@@ -33,6 +33,17 @@ test('invalid CSV is rejected rather than silently repaired', () => {
     'id,query\nx,a"b',
     'id,query\nx,"a"z'
   ]) assert.throws(() => parseDataset(csv, 'csv'), /CSV|column|header/i);
+});
+
+test('demo address-only CSV generates IDs without requiring metadata or truth', () => {
+  const rows = parseAddressCsv('\uFEFF"1 Main St, London"\r\n"2 ""Test"" Road, Paris"\r\n');
+  assert.deepEqual(rows, [
+    { id: 'demo-1', query: '1 Main St, London', category: 'demo' },
+    { id: 'demo-2', query: '2 "Test" Road, Paris', category: 'demo' }
+  ]);
+  for (const source of ['', 'London,UK', 'id,query\n1,London', '"unfinished', 'x'.repeat(501), 'x'.repeat(1048577), Array(201).fill('London').join('\n')]) {
+    assert.throws(() => parseAddressCsv(source));
+  }
 });
 
 test('invalid input, duplicate IDs, unknown fields and weak or conflicting truth fail validation', () => {

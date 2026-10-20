@@ -19,8 +19,9 @@ test('configuration fails closed on unsafe bindings and incomplete live setup', 
   for (const env of [
     { PORT: '-1' }, { ENABLE_LIVE: 'yes' }, { ENABLE_LIVE: 'true' },
     { HOST: '0.0.0.0' }, { REQUIRE_PLATFORM_AUTH: 'true' },
+    { LIVE_HTTP_ATTEMPT_LIMIT: '-1' }, { LIVE_HTTP_ATTEMPT_LIMIT: '1.5' }, { LIVE_HTTP_ATTEMPT_LIMIT: '30' },
     { AZURE_MAPS_GEOGRAPHY: 'untrusted' }
-  ]) assert.throws(() => readConfig(env), /PORT|true|CLIENT_ID|authentication|binding|GEOGRAPHY/);
+  ]) assert.throws(() => readConfig(env), /PORT|true|CLIENT_ID|authentication|binding|GEOGRAPHY|ATTEMPT/);
 });
 
 test('health is explicit about not verifying Maps connectivity', async t => {
@@ -29,6 +30,7 @@ test('health is explicit about not verifying Maps connectivity', async t => {
   assert.equal(response.status, 200);
   assert.equal((await response.json()).mapsConnectivity, 'not-checked');
   assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  assert.equal(response.headers.get('referrer-policy'), 'same-origin');
   assert.equal((await (await fetch(`${base}/api/config`)).json()).liveEnabled, false);
 });
 
@@ -76,9 +78,22 @@ test('only the public asset allowlist is served, with no reflected address data'
   assert.equal((await fetch(`${base}/modules/dataset.js`)).status, 200);
 });
 
+test('oversized bodies return an explicit limit error before any evaluation', async t => {
+  const { base } = await start(t);
+  const response = await fetch(`${base}/api/run`, { method: 'POST', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'x'.repeat(1048577) }) });
+  assert.equal(response.status, 413);
+  assert.equal((await response.json()).error.code, 'BODY_TOO_LARGE');
+});
+
 test('App Service requests require the platform principal except for health', async t => {
   const { base } = await start(t, { platformHosted: true, requirePlatformAuth: true, hostname: '127.0.0.1' });
   assert.equal((await fetch(`${base}/api/config`)).status, 401);
   assert.equal((await fetch(`${base}/healthz`)).status, 200);
   assert.equal((await fetch(`${base}/api/config`, { headers: { 'x-ms-client-principal-id': 'test-principal' } })).status, 200);
+});
+
+test('platform health probes may use an internal host without weakening API host checks', async t => {
+  const { base } = await start(t, { platformHosted: true, requirePlatformAuth: true, hostname: 'approved.azurewebsites.net' });
+  assert.equal((await fetch(`${base}/healthz`)).status, 200);
+  assert.equal((await fetch(`${base}/api/config`)).status, 403);
 });

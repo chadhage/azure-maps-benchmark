@@ -1,4 +1,5 @@
 import { PocError } from '../public/modules/errors.js';
+import { join } from 'node:path';
 
 /** @param {NodeJS.ProcessEnv} [env] */
 export function readConfig(env = process.env) {
@@ -19,8 +20,12 @@ export function readConfig(env = process.env) {
   if (!['global', 'us', 'eu'].includes(geography)) throw new PocError('INVALID_CONFIG', 'AZURE_MAPS_GEOGRAPHY must be global, us, or eu.');
   const enableLive = boolean('ENABLE_LIVE', false);
   const clientId = env.AZURE_MAPS_CLIENT_ID ?? '';
+  const attemptLimit = Number(env.LIVE_HTTP_ATTEMPT_LIMIT ?? 0);
+  if (!Number.isSafeInteger(attemptLimit) || attemptLimit < 0) throw new PocError('INVALID_CONFIG', 'LIVE_HTTP_ATTEMPT_LIMIT must be a nonnegative integer.');
+  const attemptLedgerPath = env.LIVE_HTTP_ATTEMPT_LEDGER ?? (platformHosted && env.HOME ? join(env.HOME, 'data', 'maps-demo-attempts.log') : '');
+  if (attemptLimit > 0 && !attemptLedgerPath) throw new PocError('INVALID_CONFIG', 'A persistent LIVE_HTTP_ATTEMPT_LEDGER path is required for the attempt limit.');
   if (enableLive && !clientId.trim()) throw new PocError('MISSING_MAPS_CLIENT_ID', 'Set AZURE_MAPS_CLIENT_ID before enabling live requests.');
-  return { host, port, platformHosted, requirePlatformAuth, enableLive, clientId, geography, hostname: env.WEBSITE_HOSTNAME ?? '' };
+  return { host, port, platformHosted, requirePlatformAuth, enableLive, clientId, geography, attemptLimit, attemptLedgerPath, hostname: env.WEBSITE_HOSTNAME ?? '' };
 }
 
 /** @typedef {ReturnType<typeof readConfig>} Config */

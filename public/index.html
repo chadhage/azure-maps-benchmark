@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An evidence-led workbench for evaluating Azure Maps on incomplete and challenging addresses.">
-  <meta name="color-scheme" content="light">
-  <title>Address Intelligence | SMBC Azure Maps POC</title>
+  <meta name="color-scheme" content="light dark">
+  <title>Address Intelligence | Zava Azure Maps POC</title>
+  <script type="module" src="/modules/theme.js"></script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/app.js"></script>
@@ -15,7 +16,7 @@
   <aside class="rail" aria-label="Project identity"><a href="#overview" class="brand-mark" aria-label="Address Intelligence home">ai<span>.</span></a><span class="rail-caption">LOCATION / INTELLIGENCE</span><span class="rail-bottom">01</span></aside>
   <div class="shell">
     <header class="topbar">
-      <a class="wordmark" href="#overview">SMBC <span>/</span> <strong>Azure Maps POC</strong></a>
+      <a class="wordmark" href="#overview">Zava <span>/</span> <strong>Azure Maps POC</strong></a>
       <nav aria-label="Main navigation">
         <a href="#overview" data-nav="overview" aria-current="page">Overview</a>
         <a href="#lab" data-nav="lab">Evaluation lab</a>
@@ -37,7 +38,7 @@
             <div class="signal-header"><span class="eyebrow">EXPERIMENT STATUS</span><span class="small-tag">POC / 01</span></div>
             <div class="coordinate-art" aria-hidden="true"><div class="axis horizontal"></div><div class="axis vertical"></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><span class="point point-a"></span><span class="point point-b"></span><span class="point-label">INPUT &#8594; CANDIDATES &#8594; EVIDENCE</span></div>
             <div class="signal-stats"><div><strong id="hero-cases">0</strong><span>cases evaluated</span></div><div><strong>02</strong><span>search strategies</span></div></div>
-            <p id="hero-evidence">Awaiting evidence. No SMBC efficacy conclusion has been drawn.</p>
+            <p id="hero-evidence">Awaiting evidence. No Zava efficacy conclusion has been drawn.</p>
           </div>
         </div>
         <div class="section-heading"><div><span class="eyebrow">THE EVALUATION FRAMEWORK</span><h2>A match is a starting point.<br>Not a conclusion.</h2></div><p>Service confidence is a signal.<br>Independent truth is the measure.</p></div>
@@ -46,11 +47,25 @@
           <article class="principle"><span class="step">02 / COMPARE</span><h3>Keep the denominators.</h3><p>Compare free-form geocoding and contextual address autocomplete. Report coverage, top-1 and top-k correctness, errors, and latency separately.</p></article>
           <article class="principle"><span class="step">03 / SUBSTANTIATE</span><h3>Show your working.</h3><p>Inspect ranked candidates. Adjudicate unlabelled cases without inflating accuracy. Export timestamped findings with dataset fingerprints.</p></article>
         </div>
-        <div class="notice"><strong>Demonstration, not a verdict.</strong><span>The included fixtures are invented and deliberately contain failures. Only an approved SMBC dataset and independent expected answers can establish suitability.</span><a href="#methodology">Read the method &#8594;</a></div>
+        <div class="notice"><strong>Demonstration, not a verdict.</strong><span>The included fixtures are invented and deliberately contain failures. Only an approved Zava dataset and independent expected answers can establish suitability.</span><a href="#methodology">Read the method &#8594;</a></div>
       </section>
 
       <section id="lab" class="page" aria-labelledby="lab-title" hidden>
         <div class="page-heading"><div><span class="eyebrow">WORKBENCH / 01</span><h1 id="lab-title">Evaluation lab<span class="accent">.</span></h1><p>Build a repeatable experiment. Start offline, then explicitly opt into live evidence.</p></div><span class="small-tag">MAX 200 CASES / 1 MiB</span></div>
+        <section class="panel" aria-labelledby="live-demo-title">
+          <h2 id="live-demo-title">Live address demo / 1a and 1b</h2>
+          <p>Supply your own addresses. This calls Azure Maps geocoding, not the invented fixtures. A candidate is not proof of correctness or deliverability.</p>
+          <p id="demo-availability" role="status">Checking live availability...</p>
+          <form id="demo-form">
+            <label for="demo-kind">Demo workflow</label>
+            <select id="demo-kind"><option value="single">1a / Single location</option><option value="batch">1b / CSV batch</option></select>
+            <div id="demo-single-panel"><label for="demo-query">Location candidate</label><input id="demo-query" type="text" maxlength="500" autocomplete="off" placeholder="Enter the location or address to resolve"></div>
+            <div id="demo-batch-panel" hidden><label for="demo-file">Address-only CSV file</label><input id="demo-file" type="file" accept=".csv,text/csv"><p class="help">One address field per row, no header, IDs or other columns. Quote addresses containing commas, for example: &quot;1 Main Street, London&quot;. Maximum 200 addresses / 1 MiB. Results may stop at the shared HTTP-attempt allowance.</p></div>
+            <label class="checkbox-label"><input id="demo-consent" type="checkbox"> I am authorized to send these addresses to Azure Maps and accept applicable charges and geographic processing.</label>
+            <button id="demo-run" class="button primary" type="submit" disabled>Resolve location</button>
+            <p id="demo-status" role="status">No live demo response received in this page session. Availability is shown above.</p>
+          </form>
+        </section>
         <form id="run-form">
           <div class="lab-grid">
             <section class="panel dataset-panel" aria-labelledby="dataset-heading">
@@ -91,6 +106,7 @@
             <article class="metric"><span>p95 end-to-end latency</span><strong id="metric-latency">--</strong><small id="latency-note"></small></article>
           </div>
           <section class="panel strategy-panel"><div class="panel-heading"><h2>Strategy comparison</h2><span class="muted">Primary comparison / independent truth only</span></div><div class="table-scroll"><table><thead><tr><th>Strategy</th><th>Coverage</th><th>Top-1</th><th>Top-k</th><th>Labelled n</th><th>Top-1 95% interval</th><th>Errors</th><th>Manual accepted</th></tr></thead><tbody id="strategy-rows"></tbody></table></div><p class="help">Wilson intervals are descriptive, not population guarantees. Autocomplete adds context and filters to addresses; this is a strategy comparison, not an isolated API comparison. Overall cards count case/strategy trials, not unique cases.</p></section>
+          <section class="panel category-panel"><div class="panel-heading"><h2>Challenge breakdown</h2><span class="muted">Category by strategy / do not pool away the hard cases</span></div><div class="table-scroll"><table><thead><tr><th>Category</th><th>Strategy</th><th>Trials</th><th>Labelled n</th><th>Coverage</th><th>Top-1</th><th>Top-k</th><th>Errors</th></tr></thead><tbody id="category-rows"></tbody></table></div><p class="help">Small categories and weak labels can mislead. Negative-control correctness is abstention success, not evidence of positive-address resolution.</p></section>
           <section class="panel evidence-panel"><div class="panel-heading"><h2>Case evidence</h2><span id="result-count" class="muted"></span></div>
             <div class="filters"><label for="case-search" class="sr-only">Search cases</label><input id="case-search" type="search" placeholder="Search case ID or address"><label for="category-filter" class="sr-only">Filter category</label><select id="category-filter"><option value="">All categories</option></select><label for="outcome-filter" class="sr-only">Filter outcome</label><select id="outcome-filter"><option value="">All outcomes</option><option value="correct">Correct top-1</option><option value="incorrect">Incorrect top-1</option><option value="unlabelled">Unlabelled</option><option value="error">Request error</option></select></div>
             <div class="table-scroll"><table><thead><tr><th>Case / input</th><th>Strategy</th><th>Top candidate</th><th>Outcome</th><th>Confidence</th><th>Review</th></tr></thead><tbody id="case-rows"></tbody></table></div>
@@ -101,7 +117,7 @@
 
       <section id="methodology" class="methodology" aria-labelledby="method-title"><div><span class="eyebrow">HOW TO READ THE EVIDENCE</span><h2 id="method-title">An honest measurement contract.</h2></div><div class="method-grid"><article><h3>Coverage &#8800; accuracy</h3><p>A returned candidate is coverage. Correctness requires all supplied independent address fields and coordinate tolerances to match. Unlabelled cases never enter automated accuracy.</p></article><article><h3>Errors stay in the denominator</h3><p>Labelled request failures count as incorrect. Explicit no-match controls can be correct without a candidate. A high provider confidence is not a calibrated probability of correctness.</p></article><article><h3>Separate evidence from judgement</h3><p>Manual top-candidate acceptance is separate from automated accuracy. Fixture data proves the workflow, not Azure efficacy. Agree business targets before drawing conclusions.</p></article></div></section>
     </main>
-    <footer><span>SMBC / AZURE MAPS EFFICACY POC</span><span>Built for scrutiny, not just a score.</span><a href="https://learn.microsoft.com/en-us/rest/api/maps/search/get-geocoding?view=rest-maps-2026-01-01" target="_blank" rel="noreferrer">API reference &#8599;</a></footer>
+    <footer><span>Zava / AZURE MAPS EFFICACY POC</span><span>Built for scrutiny, not just a score.</span><a href="https://learn.microsoft.com/en-us/rest/api/maps/search/get-geocoding?view=rest-maps-2026-01-01" target="_blank" rel="noreferrer">API reference &#8599;</a></footer>
   </div>
   <div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
   <dialog id="case-dialog" aria-labelledby="case-title"><div class="dialog-heading"><div><span class="eyebrow">CANDIDATE INSPECTION</span><h2 id="case-title"></h2></div><button id="close-dialog" class="button secondary compact" aria-label="Close case details">Close &#215;</button></div><p id="case-query"></p><pre id="case-truth"></pre><div id="candidate-details"></div><form id="review-form"><h3>Adjudicate the top candidate</h3><p class="help">This is a self-reported analyst decision, not a verified label or a change to automated accuracy. Export detailed JSON to preserve review history.</p><div class="input-pair"><div><label for="review-decision">Decision</label><select id="review-decision"><option value="unresolved">Unresolved</option><option value="accepted">Accept top candidate</option><option value="rejected">Reject top candidate</option></select></div><div><label for="reviewer">Reviewer identity</label><input id="reviewer" required maxlength="100" autocomplete="off"></div></div><label for="review-note">Rationale / verification source</label><textarea id="review-note" rows="2" maxlength="1000"></textarea><button type="submit" class="button primary">Save review</button><p id="review-status" role="status"></p></form></dialog>

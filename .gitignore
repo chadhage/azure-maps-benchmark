@@ -5,6 +5,9 @@ node_modules/
 .copilot-azure/
 data/private/*
 !data/private/.gitkeep
+data/test-data.csv
+data/reference_a.csv
+data/reference_a.xlsx
 results/*
 !results/.gitkeep
 coverage/
@@ -12,5 +15,8 @@ test-results/
 playwright-report/
 artifacts/
 infra/main.json
+.azure/*
+!.azure/deployment-plan.md
+infra/azd/main.json
 *.zip
 *.log

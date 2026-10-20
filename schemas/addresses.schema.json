@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:smbc-poc:addresses:1.0",
+  "$id": "urn:zava-poc:addresses:1.0",
   "title": "Azure Maps efficacy address dataset",
   "oneOf": [
     { "$ref": "#/$defs/cases" },

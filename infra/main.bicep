@@ -30,6 +30,24 @@ param mapsGeography string = 'global'
 @description('Keep false until the data owner has approved live Azure Maps submissions.')
 param enableLive bool = false
 
+@description('Optional workspace for platform metrics only. Request and application logs are not collected.')
+param diagnosticsWorkspaceId string = ''
+
+@description('Optional delegated subnet for private Key Vault connectivity in the dedicated deployment.')
+param appIntegrationSubnetId string = ''
+
+@minValue(0)
+@description('Optional shared persistent HTTP-attempt cap. Keep one instance; 0 disables the cap for the original evaluation workflow.')
+param liveHttpAttemptLimit int = 0
+
+@minLength(1)
+@maxLength(5)
+@description('Email recipients for the $100 monthly resource-group budget alerts.')
+param budgetAlertEmails array
+
+param budgetStartDate string = utcNow('yyyy-MM-01T00:00:00Z')
+param budgetEndDate string = dateTimeAdd(utcNow('yyyy-MM-01T00:00:00Z'), 'P12M')
+
 param tags object = {
   workload: 'azure-maps-efficacy-poc'
   dataClassification: 'restricted'
@@ -83,6 +101,7 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: plan.id
     httpsOnly: true
     clientAffinityEnabled: false
+    virtualNetworkSubnetId: empty(appIntegrationSubnetId) ? null : appIntegrationSubnetId
     siteConfig: {
       linuxFxVersion: 'NODE|22-lts'
       appCommandLine: 'node src/server.js'
@@ -92,10 +111,14 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
       ftpsState: 'Disabled'
       http20Enabled: true
       healthCheckPath: '/healthz'
+      vnetRouteAllEnabled: !empty(appIntegrationSubnetId)
       appSettings: [
         { name: 'HOST', value: '0.0.0.0' }
         { name: 'PORT', value: '8080' }
-        { name: 'ENABLE_LIVE', value: string(enableLive) }
+        { name: 'NODE_ENV', value: 'production' }
+        { name: 'ENABLE_LIVE', value: enableLive ? 'true' : 'false' }
+        { name: 'LIVE_HTTP_ATTEMPT_LIMIT', value: string(liveHttpAttemptLimit) }
+        { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'true' }
         { name: 'REQUIRE_PLATFORM_AUTH', value: 'true' }
         { name: 'AZURE_MAPS_CLIENT_ID', value: maps.properties.uniqueId }
         { name: 'AZURE_MAPS_GEOGRAPHY', value: mapsGeography }
@@ -104,7 +127,7 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
       ]
     }
   }
-  tags: tags
+  tags: union(tags, { 'azd-service-name': 'web' })
 }
 
 resource mapsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -149,7 +172,7 @@ resource auth 'Microsoft.Web/sites/config@2023-12-01' = {
         registration: {
           clientId: entraApplicationClientId
           clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
-          openIdIssuer: 'https://login.microsoftonline.com/${tenant().tenantId}/v2.0'
+          openIdIssuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
         }
         validation: {
           allowedAudiences: [
@@ -190,6 +213,52 @@ resource ftpPublishing 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2
   name: 'ftp'
   properties: {
     allow: false
+  }
+}
+
+resource monthlyBudget 'Microsoft.Consumption/budgets@2023-11-01' = {
+  name: 'maps-poc-monthly-budget'
+  properties: {
+    category: 'Cost'
+    amount: 100
+    timeGrain: 'Monthly'
+    timePeriod: {
+      startDate: budgetStartDate
+      endDate: budgetEndDate
+    }
+    notifications: {
+      Actual_GreaterThan_80_Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
+        thresholdType: 'Actual'
+        contactEmails: budgetAlertEmails
+        locale: 'en-us'
+      }
+      Actual_GreaterThan_100_Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 100
+        thresholdType: 'Actual'
+        contactEmails: budgetAlertEmails
+        locale: 'en-us'
+      }
+    }
+  }
+}
+
+resource appMetrics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(diagnosticsWorkspaceId)) {
+  name: 'platform-metrics'
+  scope: app
+  properties: {
+    workspaceId: diagnosticsWorkspaceId
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+    logs: []
   }
 }
 

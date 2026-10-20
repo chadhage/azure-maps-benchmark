@@ -1,5 +1,5 @@
 {
-  "name": "smbc-azure-maps-efficacy-poc",
+  "name": "zava-azure-maps-efficacy-poc",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -23,10 +23,10 @@
   },
   "devDependencies": {
     "@cucumber/cucumber": "12.2.0",
-    "@eslint/js": "9.39.1",
+    "@eslint/js": "9.38.0",
     "@playwright/test": "1.56.1",
     "@types/node": "22.18.0",
-    "eslint": "9.39.1",
+    "eslint": "9.38.0",
     "typescript": "5.9.3"
   }
 }

@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { runExperiment } from '../../src/experiment.js';
 import { exportReport, renderHtmlReport, renderMarkdownReport, resultsCsv } from '../../public/modules/reports.js';
 import { addressCase, candidate } from '../helpers.js';
+import { THEME_SCRIPT } from '../../public/modules/theme.js';
 
 const provider = {
   mode: 'fixture', apiVersion: '2026-01-01', geography: 'none',
@@ -60,6 +62,9 @@ test('exports are aggregate-only by default; detailed evidence is explicitly opt
   assert.equal(exportReport(run, true).results.length, 2);
   assert.match(renderHtmlReport(safe), /SIMULATED/);
   assert.match(renderMarkdownReport(safe), /Top-1/);
+  assert.match(renderHtmlReport(safe), /Zava \/ AZURE MAPS POC/);
+  assert.match(renderMarkdownReport(safe), /No Zava conclusions/);
+  assert.match(renderMarkdownReport(exportReport(run, true)), /Zava policy/);
 });
 
 test('HTML escapes untrusted addresses and CSV blocks formula injection', async () => {
@@ -72,4 +77,33 @@ test('HTML escapes untrusted addresses and CSV blocks formula injection', async 
   assert.ok(csv.includes("'=1+1"));
   assert.ok(csv.includes('query'));
   assert.equal(resultsCsv(exportReport(run)).includes('100 Example'), false);
+});
+
+test('detailed CSV preserves returned address components and coordinate order', async () => {
+  const output = {
+    ...provider,
+    search: async () => ({
+      candidates: [candidate({ formattedAddress: '1 Example St', address: { addressLine: '1 Example St', locality: 'Example City', adminDistrict: 'FL', postalCode: '33759', countryRegion: 'US' }, position: [-82.7, 27.9] })],
+      attempts: 0, retryDelayMs: 0
+    })
+  };
+  const csv = resultsCsv(await runExperiment([addressCase({ query: 'Single location' })], output, { strategies: ['geocode'] }));
+  const [header, row] = csv.trim().split(/\r?\n/).map(line => line.split(',').map(cell => cell.slice(1, -1)));
+  for (const [key, expected] of Object.entries({ addressLine: '1 Example St', locality: 'Example City', adminDistrict: 'FL', postalCode: '33759', countryRegion: 'US', longitude: "'-82.7", latitude: '27.9' })) {
+    assert.equal(row[header.indexOf(key)], expected);
+  }
+});
+
+test('standalone report permits only its exact static theme script through CSP', async () => {
+  const html = renderHtmlReport(await runExperiment([addressCase()], provider));
+  const hash = createHash('sha256').update(THEME_SCRIPT).digest('base64');
+  assert.ok(html.includes(`script-src 'sha256-${hash}'`));
+  assert.ok(html.includes(`<script>${THEME_SCRIPT}</script>`));
+});
+
+test('a negative control with a provider error is never a correctness success', async () => {
+  const failed = { ...provider, search: async () => { throw Object.assign(new Error('Provider failed'), { code: 'HTTP_503', attempts: 3 }); } };
+  const run = await runExperiment([addressCase({ expected: { source: 'Oracle', noMatch: true } })], failed);
+  assert.equal(run.results[0].evaluation.top1Correct, false);
+  assert.equal(run.overall.top1Accuracy, 0);
 });

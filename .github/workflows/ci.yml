@@ -1,4 +1,4 @@
-name: POC quality gates
+name: Verify and deploy
 on:
   push:
   pull_request:
@@ -51,3 +51,70 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+  package:
+    needs: offline-verification
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package only allowlisted application files
+        shell: pwsh
+        run: |
+          $archive = .\scripts\package.ps1
+          .\scripts\test-package.ps1 -ArchivePath $archive
+          Move-Item -LiteralPath $archive -Destination (Join-Path $env:RUNNER_TEMP 'app.zip')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: application-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}\app.zip
+          if-no-files-found: error
+          retention-days: 7
+  deploy:
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'zava-demo-pr' || 'zava-demo' }}
+      url: https://app-maps-pilot-d2c4f436.azurewebsites.net
+    concurrency:
+      group: zava-shared-demo-deployment
+      cancel-in-progress: false
+    env:
+      AZURE_CORE_OUTPUT: none
+      APP_NAME: app-maps-pilot-d2c4f436
+      RESOURCE_GROUP: rg-maps-maps-pilot
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-${{ github.run_id }}-${{ github.run_attempt }}
+          path: deployment
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy verified ZIP without provisioning or changing app settings
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          az webapp deploy --resource-group $env:RESOURCE_GROUP --name $env:APP_NAME --src-path (Join-Path 'deployment' 'app.zip') --type zip --track-status true
+          if ($LASTEXITCODE -ne 0) { throw 'Application deployment failed.' }
+      - name: Verify hosted health and authentication boundary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $site = "https://$($env:APP_NAME).azurewebsites.net"
+          $health = Invoke-WebRequest -Uri "$site/healthz" -TimeoutSec 30
+          if (($health.Content | ConvertFrom-Json).status -ne 'ok') { throw 'Unexpected health response.' }
+          if ($health.Headers['Referrer-Policy'] -ne 'same-origin') { throw 'Required referrer policy is missing.' }
+          $anonymous = Invoke-WebRequest -Uri "$site/api/config" -MaximumRedirection 0 -SkipHttpErrorCheck -TimeoutSec 30
+          if ([int]$anonymous.StatusCode -notin @(401, 403)) { throw 'Anonymous API access was not denied.' }
+          "Deployed commit $env:GITHUB_SHA to $site. Health verified; live Maps acceptance is separate." >> $env:GITHUB_STEP_SUMMARY
