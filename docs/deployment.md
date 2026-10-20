@@ -154,9 +154,11 @@ No local application deployment is performed. Existing infrastructure is retaine
 
 The workflow packages the checked-out event commit (the merge commit for a PR)
 only after both verification jobs pass. It verifies the exact ZIP allowlist and
-publishes that immutable run artifact. The deployment job does not check out or
+publishes that run's artifact. The deployment job does not check out or
 run application scripts and receives OIDC permission only after environment
-protection passes. It downloads only that run/attempt's package. The remote
+protection passes. It downloads only that run's package. Its name remains stable
+when only a failed deployment job is rerun; rerunning packaging replaces the
+artifact for the same immutable event commit. The remote
 App Service build installs runtime dependencies using its existing build setting.
 
 The `zava-demo` environment permits only the `main` branch. The `zava-demo-pr`
@@ -172,6 +174,11 @@ Azure authentication uses dedicated registration `zava-maps-github-deploy`,
 with no password or publish-profile secret. Two exact federated subjects trust
 only this repository's `zava-demo` and `zava-demo-pr` environments, issuer
 `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`.
+This repository uses GitHub's immutable subject format. The exact prefix is
+`repo:chadhage@556099/azure-maps-benchmark@1422607619`, followed by
+`:environment:zava-demo` or `:environment:zava-demo-pr`. Check
+`gh api repos/chadhage/azure-maps-benchmark/actions/oidc/customization/sub`
+before configuring trust; the legacy name-only subject is rejected.
 The service principal has Website Contributor **on this web app only**, not
 subscription, resource-group, Maps or vault access. This role can manage the app;
 environment protections and review remain essential.

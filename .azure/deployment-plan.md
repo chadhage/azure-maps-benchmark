@@ -23,7 +23,20 @@
   scenarios and 28 desktop/mobile browser tests. Actionlint 1.7.12 and YAML parse
   pass. Package inventory remains exactly 21 allowlisted files. Local Apply
   fails before parameter-file access or Azure operations.
-- First successful GitHub run remains required; no push has occurred.
+- First successful GitHub run remains required; publication is recorded below.
+
+Publication and first-run diagnosis:
+- User approved committing/pushing all nonignored project changes. Commit
+  51b69cb reached main. Run 39368410956 passed both verification platforms and
+  packaging but failed Azure login before deployment with AADSTS700213.
+- GitHub reports use_immutable_subject=true and exact prefix
+  repo:chadhage@556099/azure-maps-benchmark@1422607619. Both federated records
+  were corrected/read back using that API-provided prefix and exact environment.
+  No wildcard trust or change to GitHub subject security was introduced.
+- Artifact naming now uses run ID, not attempt ID, so a failed deploy-only rerun
+  can download the already verified package. A full packaging rerun overwrites
+  only the same run's artifact for the same immutable commit.
+- Initial release acceptance still pending successful Actions deployment.
 
 > **Status:** Validated
 

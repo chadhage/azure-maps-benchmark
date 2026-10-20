@@ -70,9 +70,10 @@ jobs:
           Move-Item -LiteralPath $archive -Destination (Join-Path $env:RUNNER_TEMP 'app.zip')
       - uses: actions/upload-artifact@v4
         with:
-          name: application-${{ github.run_id }}-${{ github.run_attempt }}
+          name: application-${{ github.run_id }}
           path: ${{ runner.temp }}\app.zip
           if-no-files-found: error
+          overwrite: true
           retention-days: 7
   deploy:
     needs: package
@@ -94,7 +95,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: application-${{ github.run_id }}-${{ github.run_attempt }}
+          name: application-${{ github.run_id }}
           path: deployment
       - uses: azure/login@v2
         with:
