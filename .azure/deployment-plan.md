@@ -37,6 +37,14 @@ Publication and first-run diagnosis:
   can download the already verified package. A full packaging rerun overwrites
   only the same run's artifact for the same immutable commit.
 - Initial release acceptance still pending successful Actions deployment.
+- Run 39369158506 then passed OIDC login and ZIP deployment; its final probe
+  failed because Invoke-WebRequest -MaximumRedirection 0 throws on an expected
+  Easy Auth 302. Hosted health remained 200, new header present, anonymous curl
+  API request denied with 401. Probe now uses a nonredirecting HTTP client and
+  accepts only 401/403 or HTTPS redirects to the same-site login or exact
+  approved Entra tenant/client/callback. The browser-style probe demonstrated
+  a direct tenant authorization redirect; the check now covers that actual
+  platform behavior without following the redirect.
 
 > **Status:** Validated
 

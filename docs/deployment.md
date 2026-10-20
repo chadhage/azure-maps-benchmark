@@ -191,8 +191,10 @@ secret or reuse the interactive sign-in registration. Do not use
 The deployment only uploads the application ZIP: no Bicep provisioning, app
 setting/authentication changes, invitation operations or Maps calls. It does not
 reset `/home/data/maps-demo-attempts.log` or expand the shared 30-attempt allowance.
-Post-deploy checks require health and denial of anonymous API access; they do
-not prove invitee sign-in or Maps correctness.
+Post-deploy checks require health and denial of anonymous API access (401/403 or
+an HTTPS redirect to the same site's sign-in path or the exact approved Entra
+tenant/client/callback). They never follow sign-in redirects and do not prove
+invitee sign-in or Maps correctness.
 
 `scripts/deploy.ps1 -Apply` fails before Azure operations. The azd provisioning
 and deployment hooks also reject the retired path. These are repository

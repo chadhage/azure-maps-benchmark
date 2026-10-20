@@ -92,6 +92,8 @@ jobs:
       AZURE_CORE_OUTPUT: none
       APP_NAME: app-maps-pilot-d2c4f436
       RESOURCE_GROUP: rg-maps-maps-pilot
+      TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      LOGIN_CLIENT_ID: ff8ed3e5-dcdf-43fb-b4ba-bbde34836888
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -116,6 +118,25 @@ jobs:
           $health = Invoke-WebRequest -Uri "$site/healthz" -TimeoutSec 30
           if (($health.Content | ConvertFrom-Json).status -ne 'ok') { throw 'Unexpected health response.' }
           if ($health.Headers['Referrer-Policy'] -ne 'same-origin') { throw 'Required referrer policy is missing.' }
-          $anonymous = Invoke-WebRequest -Uri "$site/api/config" -MaximumRedirection 0 -SkipHttpErrorCheck -TimeoutSec 30
-          if ([int]$anonymous.StatusCode -notin @(401, 403)) { throw 'Anonymous API access was not denied.' }
+          $handler = [System.Net.Http.HttpClientHandler]::new()
+          $handler.AllowAutoRedirect = $false
+          $client = [System.Net.Http.HttpClient]::new($handler)
+          $client.Timeout = [TimeSpan]::FromSeconds(30)
+          try {
+            $anonymous = $client.GetAsync("$site/api/config").GetAwaiter().GetResult()
+            try {
+              $status = [int]$anonymous.StatusCode
+              if ($status -eq 302 -and $anonymous.Headers.Location) {
+                $target = [uri]::new([uri]$site, $anonymous.Headers.Location)
+                $sameSiteLogin = $target.Authority -eq ([uri]$site).Authority -and $target.AbsolutePath -eq '/.auth/login/aad'
+                $query = [System.Web.HttpUtility]::ParseQueryString($target.Query)
+                $tenantLogin = $target.Authority -eq 'login.microsoftonline.com' -and $target.AbsolutePath -eq "/$($env:TENANT_ID)/oauth2/v2.0/authorize" -and $query['client_id'] -eq $env:LOGIN_CLIENT_ID -and $query['redirect_uri'] -eq "$site/.auth/login/aad/callback"
+                if ($target.Scheme -ne 'https' -or -not ($sameSiteLogin -or $tenantLogin)) {
+                  throw 'Anonymous API redirected outside the expected app/tenant sign-in paths.'
+                }
+              } elseif ($status -notin @(401, 403)) {
+                throw "Anonymous API access was not denied (HTTP $status)."
+              }
+            } finally { $anonymous.Dispose() }
+          } finally { $client.Dispose() }
           "Deployed commit $env:GITHUB_SHA to $site. Health verified; live Maps acceptance is separate." >> $env:GITHUB_STEP_SUMMARY
