@@ -19,6 +19,17 @@ Use the existing app/subscription/Central US and GitHub Actions deployment only.
   not a secret link; no per-user quota or internet-scale availability is promised.
 - Update access documentation. No access settings have changed yet.
 
+Release observation:
+- Commit c61b056/run 39419225249 passed Linux/Windows gates, packaging, OIDC
+  deployment and public configuration. The immediate smoke test saw stale 401
+  after restart; subsequent anonymous health/config GETs returned 200.
+- Read back platform.enabled=false, requireAuthentication=false,
+  AllowAnonymous; backend PUBLIC_DEMO=true/REQUIRE_PLATFORM_AUTH=false.
+- Add bounded status-based retry for anonymous GET checks to wait for the access
+  change, not just a health probe that can still reach a previous process.
+- Observed shared config: limit30, used0, remaining30. No ledger reset command
+  or Maps call was made by the access migration/verification.
+
 ## GitHub Actions deployment migration (approved implementation)
 
 - Requested: application deployments only through GitHub Actions after PR/push.
