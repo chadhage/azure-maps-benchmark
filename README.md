@@ -1,6 +1,6 @@
 # Azure Maps address efficacy POC for Zava
 
-An evidence-led, local-first workbench for a Cloud Solution Architect evaluating partial and challenging addresses. The repository includes a working exploratory harness, findings microsite, command-line evaluator, BDD scenarios, unit/HTTP tests, browser acceptance tests, fixtures, Bicep, deployment scripts and CI.
+An engineering POC for testing Azure Maps address resolution with complete, partial, misspelled and ambiguous inputs. It includes a web test harness, downloadable reports, a command-line evaluator, simulated responses, automated tests, Bicep templates and a GitHub Actions deployment workflow.
 
 **There are no live Azure Maps or Zava efficacy findings yet.** The eight included addresses and responses are invented fixtures. Their deliberately mixed results demonstrate the measurement workflow, not Azure's capabilities. Do not use fixture percentages in a customer recommendation.
 
@@ -13,7 +13,7 @@ npm install
 npm start
 ```
 
-Open **http://127.0.0.1:3000** and select **Explore the sample**. The offline harness and fixture CLI also run directly with Node without installed packages; dependencies are needed for live Entra authentication and the additional quality tools.
+Open **http://127.0.0.1:3000** and select **Run offline sample**. The offline harness and fixture CLI also run directly with Node without installed packages; dependencies are needed for live Entra authentication and the additional quality tools.
 
 ```powershell
 node .\src\server.js
@@ -188,7 +188,7 @@ There are no automatic Azure deployments, secret registrations or role assignmen
 | Deliverable | Location |
 | --- | --- |
 | Source / CLI / live provider | [src/](src/) |
-| Interactive harness and findings microsite | [public/](public/) |
+| Web test harness and results | [public/](public/) |
 | Shared evaluation and report generation | [public/modules/](public/modules/) |
 | BDD / TDD / unit / acceptance | [features/](features/), [test/](test/) |
 | Invented fixtures / input template | [fixtures/](fixtures/), [data/](data/) |

@@ -88,18 +88,18 @@ test('same-origin demo POST retains referrer for platform cookie-authentication 
 async function runSample(page) {
   await page.goto('/');
   await expect(page.locator('#dataset-summary')).toContainText('8 cases');
-  await page.getByRole('button', { name: 'Explore the sample' }).click();
+  await page.getByRole('button', { name: 'Run offline sample', exact: true }).click();
   await expect(page.locator('#evidence-banner')).toContainText('SIMULATED');
-  await expect(page.locator('#hero-evidence')).toContainText('No Azure or Zava efficacy conclusion.');
+  await expect(page.locator('#hero-evidence')).toContainText('These results do not measure Azure Maps accuracy for Zava.');
 }
 
 test('initial experience makes no fabricated efficacy claim and live is disabled', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('Address Intelligence | Zava Azure Maps POC');
+  await expect(page).toHaveTitle('Address Resolution | Zava Azure Maps POC');
   await expect(page.locator('.wordmark')).toContainText('Zava');
   await expect(page.locator('footer')).toContainText('Zava / AZURE MAPS EFFICACY POC');
-  await expect(page.locator('#hero-evidence')).toContainText('No Zava efficacy conclusion');
-  await expect(page.getByRole('heading', { name: 'The hard addresses. The honest answers.' })).toBeVisible();
+  await expect(page.locator('#hero-evidence')).toContainText('Zava address-resolution accuracy has not been established.');
+  await expect(page.getByRole('heading', { name: 'Azure Maps address resolution.' })).toBeVisible();
   await expect(page.locator('#hero-cases')).toHaveText('0');
   await expect(page.locator('#environment-label')).toHaveText('Offline / fixtures');
   await page.getByRole('link', { name: 'Findings 0', exact: true }).click();
@@ -224,7 +224,7 @@ test('exported HTML works standalone with its CSP and explicit dark theme', asyn
   standalone.on('pageerror', error => errors.push(error.message));
   await standalone.goto(`${pathToFileURL(path).href}?clawpilotTheme=dark`);
   await expect(standalone.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(standalone.getByRole('heading', { name: 'Address intelligence, measured.' })).toBeVisible();
+  await expect(standalone.getByRole('heading', { name: 'Address resolution results.' })).toBeVisible();
   await expect(standalone.locator('body')).toContainText('SIMULATED - NOT AZURE MAPS FINDINGS');
   expect(errors).toEqual([]);
 });

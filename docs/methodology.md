@@ -85,4 +85,4 @@ Expected labels are part of the fingerprint. Changing a label creates a differen
 
 Default exports contain aggregate metrics and the digest only; case IDs, category labels, queries, expected answers and review notes are omitted. A digest is pseudonymous metadata and may still be sensitive for small/guessable datasets. Review aggregate disclosures before publication.
 
-The HTML report is self-contained and printable. The findings microsite is the live exploratory presentation surface. Neither contains a prewritten positive recommendation. The next decision is to collect approved live evidence, inspect failures, repeat on holdout data, and compare with Zava's agreed operational criteria.
+The HTML report is self-contained and printable. The web harness displays results from the current run. Neither includes a preset recommendation. Collect approved live results, inspect errors, repeat on a separate test dataset, and compare with Zava's agreed acceptance criteria.

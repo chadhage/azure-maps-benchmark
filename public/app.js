@@ -174,7 +174,7 @@ function renderReport() {
   const overall = report.overall;
   el('nav-count').textContent = String(overall.total);
   el('hero-cases').textContent = String(report.provenance.caseCount);
-  el('hero-evidence').textContent = report.provenance.mode === 'fixture' ? 'Simulated fixtures only. No Azure or Zava efficacy conclusion.' : 'Live observations collected. Review independent truth and failure categories.';
+  el('hero-evidence').textContent = report.provenance.mode === 'fixture' ? 'Simulated responses only. These results do not measure Azure Maps accuracy for Zava.' : 'Live API results received. Compare with expected answers and review errors by category.';
   el('evidence-banner').textContent = `${report.provenance.evidence}. ${report.provenance.mode === 'fixture' ? 'These results are manufactured to demonstrate the evaluation; they are not evidence of Azure performance.' : 'These observations describe this dataset and configuration only; they do not establish population efficacy.'}`;
   el('evidence-banner').className = `evidence-banner${report.provenance.mode === 'live' ? ' live' : ''}`;
   el('metric-coverage').textContent = percent(overall.coverage);
@@ -353,7 +353,7 @@ el('demo-form').addEventListener('submit', event => {
       if (!completed?.results) throw new PocError('NO_REPORT', 'No completed demo report was received. It may have been cancelled.');
       const resolved = completed.results.filter(row => row.status !== 'error' && row.candidates.length > 0).length;
       const errors = completed.overall.errors;
-      const message = `Demo ${batch ? '1b' : '1a'} response received: ${resolved} with candidates, ${cases.length - resolved - errors} no-match, ${errors} errors. Inspect case details for API address fields; this is not a correctness verdict.`;
+      const message = `Demo ${batch ? '1b' : '1a'} response received: ${resolved} with candidates, ${cases.length - resolved - errors} no-match, ${errors} errors. Inspect case details for API address fields. Returned candidates have not been verified for correctness.`;
       el('demo-status').textContent = message;
       notify(message, errors > 0);
       await refreshDemoAvailability();
