@@ -92,6 +92,38 @@ test('App Service requests require the platform principal except for health', as
   assert.equal((await fetch(`${base}/api/config`, { headers: { 'x-ms-client-principal-id': 'test-principal' } })).status, 200);
 });
 
+test('public hosted configuration is explicit and requires a persistent cap for live access', () => {
+  const hosted = { HOST: '0.0.0.0', WEBSITE_INSTANCE_ID: 'test-instance', WEBSITE_HOSTNAME: 'demo.azurewebsites.net', HOME: '/home', PUBLIC_DEMO: 'true' };
+  assert.equal(readConfig({ ...hosted }).publicDemo, true);
+  assert.equal(readConfig({ ...hosted }).requirePlatformAuth, false);
+  assert.throws(() => readConfig({ ...hosted, REQUIRE_PLATFORM_AUTH: 'true' }), /PUBLIC_DEMO/);
+  assert.throws(() => readConfig({ PUBLIC_DEMO: 'true' }), /PUBLIC_DEMO/);
+  assert.throws(() => readConfig({ ...hosted, ENABLE_LIVE: 'true', AZURE_MAPS_CLIENT_ID: 'test' }), /positive persistent/);
+  assert.throws(() => readConfig({ ...hosted, HOME: '', LIVE_HTTP_ATTEMPT_LIMIT: '30' }), /persistent/);
+  const config = readConfig({ ...hosted, ENABLE_LIVE: 'true', AZURE_MAPS_CLIENT_ID: 'test', LIVE_HTTP_ATTEMPT_LIMIT: '30' });
+  assert.equal(config.attemptLimit, 30);
+  assert.match(config.attemptLedgerPath, /maps-demo-attempts\.log$/);
+});
+
+test('public hosted requests need no principal but retain consent, origin and private-file controls', async t => {
+  const { base } = await start(t, { platformHosted: true, publicDemo: true, requirePlatformAuth: false, hostname: '127.0.0.1', enableLive: true });
+  assert.equal((await fetch(`${base}/`)).status, 200);
+  assert.equal((await fetch(`${base}/api/config`)).status, 200);
+  assert.equal((await fetch(`${base}/data/private/input.json`)).status, 404);
+  const dataset = await (await fetch(`${base}/api/sample`)).json();
+  const post = (body, origin = base.replace('http:', 'https:'), site = 'same-origin') => fetch(`${base}/api/run`, {
+    method: 'POST', headers: { Origin: origin, 'Sec-Fetch-Site': site, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  const fixture = await post({ mode: 'fixture', dataset });
+  assert.equal(fixture.status, 200);
+  assert.equal((await fixture.json()).overall.httpAttempts, 0);
+  const noConsent = await post({ mode: 'live', dataset });
+  assert.equal(noConsent.status, 403);
+  assert.equal((await noConsent.json()).error.code, 'LIVE_CONSENT_REQUIRED');
+  assert.equal((await post({ mode: 'fixture', dataset }, 'https://other.example')).status, 403);
+  assert.equal((await post({ mode: 'fixture', dataset }, base.replace('http:', 'https:'), 'cross-site')).status, 403);
+});
+
 test('platform health probes may use an internal host without weakening API host checks', async t => {
   const { base } = await start(t, { platformHosted: true, requirePlatformAuth: true, hostname: 'approved.azurewebsites.net' });
   assert.equal((await fetch(`${base}/healthz`)).status, 200);

@@ -1,5 +1,24 @@
 # Azure Maps Pilot Deployment Plan
 
+## Public demo access (approved request, 2026-10-20)
+
+The user repeated the request to make the demo accessible to everyone with its
+URL. Remove sign-in for the harness and live single/batch submission routes.
+Use the existing app/subscription/Central US and GitHub Actions deployment only.
+
+- Add explicit public-demo configuration; allow hosted binding without login
+  only in this mode. Public live mode requires a persistent positive attempt cap.
+- Keep existing 30-attempt ledger without reset, consent, input limits, one
+  active run, host/origin checks and managed-identity Maps access.
+- Wire Bicep and GitHub deployment settings/probes to the public mode. Apply
+  settings through Actions after code deployment; no local Azure changes.
+- Keep vault private and retain identity resources for potential access rollback.
+- Verify anonymous page/config and a fixture POST without paid Maps calls.
+  Validate malicious-origin denial and public-mode startup constraints offline.
+- Public visitors can use all remaining live allowance. URL access is public,
+  not a secret link; no per-user quota or internet-scale availability is promised.
+- Update access documentation. No access settings have changed yet.
+
 ## GitHub Actions deployment migration (approved implementation)
 
 - Requested: application deployments only through GitHub Actions after PR/push.
@@ -397,6 +416,29 @@ Official references:
 - [ ] Preserve detailed outputs privately; document decision and pilot limitations without representative efficacy claims.
 
 ## Validation proof
+
+Public-mode preparation, 2026-10-20:
+- `npm run verify` passed all quality gates, including public hosted startup,
+  anonymous page/config/fixture submission, consent/origin enforcement and
+  private-file denial. Existing restricted-mode behavior remains tested.
+- Both Bicep entry points compile. Resource-group default remains restricted;
+  dedicated wrapper explicitly defaults public and passes that flag through.
+- Packaging passes its exact 21-file allowlist; workflow YAML parses.
+- Complete results: 53 unit/HTTP tests, five BDD scenarios and 28 browser tests,
+  coverage gates, type/lint all pass. Actionlint 1.7.12 and embedded PowerShell
+  parsing pass.
+- CLI core validation passes authentication, compilation, ARM validation and
+  what-if. Preview reports 12 creates/27 modifies/12 deletes; the infrastructure
+  preview is NOT being executed. Only the existing app's ZIP and explicit
+  public access flags are deployed through Actions.
+- Maps/vault roles remain unchanged. The existing app-scoped Website Contributor
+  deployer role was read back and covers app config access; no role expansion.
+- No new resource type/location or policy exception is included; retained
+  inherited-policy review applies. Actual ARM validation found no blocking error.
+- No local access-setting updates or application deployments were executed.
+  The Actions job will set only PUBLIC_DEMO/REQUIRE_PLATFORM_AUTH and Easy Auth
+  public enforcement flags after code deployment, verifying cap 30 first.
+  It never resets the ledger or changes live enablement.
 
 GitHub Actions migration validation, 2026-10-20 UTC:
 - `npm run verify` passed: types/lint, 51 unit/HTTP tests and required coverage,

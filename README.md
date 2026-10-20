@@ -47,12 +47,16 @@ postal code, country/region, coordinates and provider diagnostics. Missing
 fields are labelled, not invented. Detailed CSV/JSON exports require the
 address-inclusion opt-in. A returned candidate is not proof of correctness.
 
-The invite-only hosted demo uses Entra identity/group membership, not a
-browser-supplied email. Its shared allowance is **30 HTTP attempts**, including
+The hosted demo is public: anyone with the URL can open it and submit single
+addresses or CSV batches without signing in. All visitors share **30 HTTP
+attempts**, including
 retries and attempts from the advanced lab, persisted across restarts. The
 remaining count is shown in the demo panel. Exhaustion requires owner review;
 there is no browser reset. The original frozen evaluation pilot is separate.
 See [deployment and access operations](docs/deployment.md).
+Visitors can exhaust the remaining allowance; this is not a per-user quota.
+Only submit addresses you are authorized to process. The site does not expose
+other visitors' results or a shared report history.
 
 ## Add your evaluation address list
 
@@ -163,7 +167,7 @@ See [verification status](docs/verification.md) for checks actually executed in 
 
 ## Deployment and operational boundaries
 
-[Bicep](infra/main.bicep) provisions Gen2 Azure Maps with local/key auth disabled, a B1 Linux App Service plan, a system-assigned identity, Maps RBAC, HTTPS, and single-tenant/group-restricted App Service authentication. It references an **existing** RBAC-enabled Key Vault containing an **existing** Entra application secret. No secret value is accepted by the template.
+[Bicep](infra/main.bicep) provisions Gen2 Azure Maps with local/key auth disabled, a B1 Linux App Service plan, a system-assigned identity, Maps RBAC and HTTPS. The dedicated deployment uses `publicDemo=true` for anonymous access. The resource-group template defaults to restricted Entra/group access; its existing Key Vault reference and login identity are retained for rollback. No secret value is accepted by the template.
 
 Deployment is opt-in and is not executed by CI:
 

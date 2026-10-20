@@ -80,7 +80,7 @@ async function api(path, init) {
   }
   if (!response.ok) {
     const error = isObject(body) && isObject(body.error) ? body.error : {};
-    const guidance = response.status === 401 || response.status === 403 ? ' Refresh the hosted page and sign in again. If this persists, ask the owner to check App Service authentication and same-origin POST settings.' : '';
+    const guidance = response.status === 401 || response.status === 403 ? ' Refresh the page. If this persists, ask the owner to check the access configuration, submission consent and same-origin POST settings.' : '';
     throw new PocError(typeof error.code === 'string' ? error.code : 'REQUEST_FAILED', typeof error.message === 'string' ? error.message : `Server returned HTTP ${response.status}.${guidance}`);
   }
   if (body === null) throw new PocError('INVALID_RESPONSE', 'Server returned an empty JSON response.');

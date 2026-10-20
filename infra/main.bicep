@@ -11,8 +11,11 @@ param webAppName string
 @description('Existing single-tenant Entra web application client ID, not the Maps account uniqueId.')
 param entraApplicationClientId string
 
-@description('Only members of this Entra group may use the hosted POC.')
+@description('Allowed Entra group when publicDemo is false; retained for restricted-access rollback.')
 param allowedEntraGroupObjectId string
+
+@description('Allow anonymous harness and API access. Public live use requires a positive persistent HTTP-attempt cap.')
+param publicDemo bool = false
 
 @description('Existing RBAC-enabled Key Vault in this resource group, containing the Entra web application client secret.')
 param authKeyVaultName string
@@ -119,7 +122,8 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'ENABLE_LIVE', value: enableLive ? 'true' : 'false' }
         { name: 'LIVE_HTTP_ATTEMPT_LIMIT', value: string(liveHttpAttemptLimit) }
         { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'true' }
-        { name: 'REQUIRE_PLATFORM_AUTH', value: 'true' }
+        { name: 'REQUIRE_PLATFORM_AUTH', value: publicDemo ? 'false' : 'true' }
+        { name: 'PUBLIC_DEMO', value: publicDemo ? 'true' : 'false' }
         { name: 'AZURE_MAPS_CLIENT_ID', value: maps.properties.uniqueId }
         { name: 'AZURE_MAPS_GEOGRAPHY', value: mapsGeography }
         { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
@@ -155,12 +159,12 @@ resource auth 'Microsoft.Web/sites/config@2023-12-01' = {
   name: 'authsettingsV2'
   properties: {
     platform: {
-      enabled: true
+      enabled: !publicDemo
       runtimeVersion: '~1'
     }
     globalValidation: {
-      requireAuthentication: true
-      unauthenticatedClientAction: 'RedirectToLoginPage'
+      requireAuthentication: !publicDemo
+      unauthenticatedClientAction: publicDemo ? 'AllowAnonymous' : 'RedirectToLoginPage'
       redirectToProvider: 'azureactivedirectory'
       excludedPaths: [
         '/healthz'

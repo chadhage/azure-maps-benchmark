@@ -92,8 +92,7 @@ jobs:
       AZURE_CORE_OUTPUT: none
       APP_NAME: app-maps-pilot-d2c4f436
       RESOURCE_GROUP: rg-maps-maps-pilot
-      TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      LOGIN_CLIENT_ID: ff8ed3e5-dcdf-43fb-b4ba-bbde34836888
+      SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -110,12 +109,32 @@ jobs:
           $ErrorActionPreference = 'Stop'
           az webapp deploy --resource-group $env:RESOURCE_GROUP --name $env:APP_NAME --src-path (Join-Path 'deployment' 'app.zip') --type zip --track-status true
           if ($LASTEXITCODE -ne 0) { throw 'Application deployment failed.' }
-      - name: Verify hosted health and authentication boundary
+      - name: Enable public demo without resetting the shared allowance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $limit = az webapp config appsettings list --resource-group $env:RESOURCE_GROUP --name $env:APP_NAME --query "[?name=='LIVE_HTTP_ATTEMPT_LIMIT'].value | [0]" --output tsv
+          if ($LASTEXITCODE -ne 0 -or ([string]$limit).Trim() -ne '30') { throw 'Expected existing 30-attempt cap; refusing public access.' }
+          az webapp config appsettings set --resource-group $env:RESOURCE_GROUP --name $env:APP_NAME --settings PUBLIC_DEMO=true REQUIRE_PLATFORM_AUTH=false --output none
+          if ($LASTEXITCODE -ne 0) { throw 'Public backend configuration failed.' }
+          $authId = "/subscriptions/$($env:SUBSCRIPTION_ID)/resourceGroups/$($env:RESOURCE_GROUP)/providers/Microsoft.Web/sites/$($env:APP_NAME)/config/authsettingsV2"
+          az resource update --ids $authId --api-version 2023-12-01 --set properties.platform.enabled=false properties.globalValidation.requireAuthentication=false properties.globalValidation.unauthenticatedClientAction=AllowAnonymous --output none
+          if ($LASTEXITCODE -ne 0) { throw 'Public platform access configuration failed.' }
+          az webapp restart --resource-group $env:RESOURCE_GROUP --name $env:APP_NAME
+          if ($LASTEXITCODE -ne 0) { throw 'Restart after public configuration failed.' }
+      - name: Verify anonymous harness, API and fixture submission
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $site = "https://$($env:APP_NAME).azurewebsites.net"
-          $health = Invoke-WebRequest -Uri "$site/healthz" -TimeoutSec 30
+          $health = $null
+          for ($attempt = 1; $attempt -le 12; $attempt++) {
+            $probe = Invoke-WebRequest -Uri "$site/healthz" -TimeoutSec 30 -SkipHttpErrorCheck
+            if ($probe.StatusCode -eq 200) { $health = $probe; break }
+            Write-Warning "Startup probe $attempt returned HTTP $($probe.StatusCode)."
+            Start-Sleep -Seconds 10
+          }
+          if (-not $health) { throw 'Application did not become healthy after restart.' }
           if (($health.Content | ConvertFrom-Json).status -ne 'ok') { throw 'Unexpected health response.' }
           if ($health.Headers['Referrer-Policy'] -ne 'same-origin') { throw 'Required referrer policy is missing.' }
           $handler = [System.Net.Http.HttpClientHandler]::new()
@@ -123,20 +142,29 @@ jobs:
           $client = [System.Net.Http.HttpClient]::new($handler)
           $client.Timeout = [TimeSpan]::FromSeconds(30)
           try {
-            $anonymous = $client.GetAsync("$site/api/config").GetAwaiter().GetResult()
-            try {
-              $status = [int]$anonymous.StatusCode
-              if ($status -eq 302 -and $anonymous.Headers.Location) {
-                $target = [uri]::new([uri]$site, $anonymous.Headers.Location)
-                $sameSiteLogin = $target.Authority -eq ([uri]$site).Authority -and $target.AbsolutePath -eq '/.auth/login/aad'
-                $query = [System.Web.HttpUtility]::ParseQueryString($target.Query)
-                $tenantLogin = $target.Authority -eq 'login.microsoftonline.com' -and $target.AbsolutePath -eq "/$($env:TENANT_ID)/oauth2/v2.0/authorize" -and $query['client_id'] -eq $env:LOGIN_CLIENT_ID -and $query['redirect_uri'] -eq "$site/.auth/login/aad/callback"
-                if ($target.Scheme -ne 'https' -or -not ($sameSiteLogin -or $tenantLogin)) {
-                  throw 'Anonymous API redirected outside the expected app/tenant sign-in paths.'
+            foreach ($path in @('/', '/api/config', '/api/sample')) {
+              $anonymous = $client.GetAsync("$site$path").GetAwaiter().GetResult()
+              try {
+                if ([int]$anonymous.StatusCode -ne 200) { throw "Anonymous $path returned HTTP $([int]$anonymous.StatusCode)." }
+                if ($path -eq '/api/config') {
+                  $config = $anonymous.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+                  if ($config.attemptBudget.limit -ne 30) { throw 'Shared cap was changed or disabled.' }
+                  $usedBefore = $config.attemptBudget.used
                 }
-              } elseif ($status -notin @(401, 403)) {
-                throw "Anonymous API access was not denied (HTTP $status)."
-              }
-            } finally { $anonymous.Dispose() }
+                if ($path -eq '/api/sample') { $sample = $anonymous.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json }
+              } finally { $anonymous.Dispose() }
+            }
+            $body = @{mode='fixture';dataset=$sample} | ConvertTo-Json -Depth 30
+            $client.DefaultRequestHeaders.Add('Origin', $site)
+            $content = [System.Net.Http.StringContent]::new($body, [System.Text.Encoding]::UTF8, 'application/json')
+            try {
+              $result = $client.PostAsync("$site/api/run", $content).GetAwaiter().GetResult()
+              try {
+                if ([int]$result.StatusCode -ne 200) { throw "Anonymous fixture POST returned HTTP $([int]$result.StatusCode)." }
+                $report = $result.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+                if ($report.overall.httpAttempts -ne 0 -or $report.results.Count -ne 16) { throw 'Unexpected anonymous fixture report.' }
+              } finally { $result.Dispose() }
+            } finally { $content.Dispose() }
+            "Shared allowance at verification: $usedBefore / 30 used. Probe made no Maps calls." >> $env:GITHUB_STEP_SUMMARY
           } finally { $client.Dispose() }
-          "Deployed commit $env:GITHUB_SHA to $site. Health verified; live Maps acceptance is separate." >> $env:GITHUB_STEP_SUMMARY
+          "Deployed commit $env:GITHUB_SHA to $site. Anonymous page, API and fixture POST verified; live Maps accuracy is separate." >> $env:GITHUB_STEP_SUMMARY

@@ -24,6 +24,9 @@ param mapsGeography string = 'global'
 @description('Leave false until hosted access is verified and the bounded pilot is approved to start.')
 param enableLive bool = false
 
+@description('Public demo access. Set false to restore the retained Entra/group gate.')
+param publicDemo bool = true
+
 @minValue(1)
 param liveHttpAttemptLimit int = 30
 
@@ -65,6 +68,7 @@ module workbench '../main.bicep' = {
     authSecretName: 'entra-web-client-secret'
     mapsGeography: mapsGeography
     enableLive: enableLive
+    publicDemo: publicDemo
     liveHttpAttemptLimit: liveHttpAttemptLimit
     budgetAlertEmails: [
       budgetAlertEmail

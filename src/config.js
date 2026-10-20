@@ -14,8 +14,10 @@ export function readConfig(env = process.env) {
   const host = env.HOST ?? '127.0.0.1';
   const platformHosted = Boolean(env.WEBSITE_INSTANCE_ID);
   const requirePlatformAuth = boolean('REQUIRE_PLATFORM_AUTH', false);
+  const publicDemo = boolean('PUBLIC_DEMO', false);
+  if (publicDemo && (!platformHosted || requirePlatformAuth)) throw new PocError('INVALID_CONFIG', 'PUBLIC_DEMO requires App Service with REQUIRE_PLATFORM_AUTH=false.');
   if (requirePlatformAuth && !platformHosted) throw new PocError('INVALID_CONFIG', 'Platform authentication requires an Azure App Service host.');
-  if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !(requirePlatformAuth && platformHosted)) throw new PocError('UNPROTECTED_HOST', 'Non-loopback binding requires App Service with platform authentication enforced.');
+  if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !(platformHosted && (requirePlatformAuth || publicDemo))) throw new PocError('UNPROTECTED_HOST', 'Non-loopback binding requires App Service with platform authentication or explicit PUBLIC_DEMO mode.');
   const geography = env.AZURE_MAPS_GEOGRAPHY ?? 'global';
   if (!['global', 'us', 'eu'].includes(geography)) throw new PocError('INVALID_CONFIG', 'AZURE_MAPS_GEOGRAPHY must be global, us, or eu.');
   const enableLive = boolean('ENABLE_LIVE', false);
@@ -24,8 +26,9 @@ export function readConfig(env = process.env) {
   if (!Number.isSafeInteger(attemptLimit) || attemptLimit < 0) throw new PocError('INVALID_CONFIG', 'LIVE_HTTP_ATTEMPT_LIMIT must be a nonnegative integer.');
   const attemptLedgerPath = env.LIVE_HTTP_ATTEMPT_LEDGER ?? (platformHosted && env.HOME ? join(env.HOME, 'data', 'maps-demo-attempts.log') : '');
   if (attemptLimit > 0 && !attemptLedgerPath) throw new PocError('INVALID_CONFIG', 'A persistent LIVE_HTTP_ATTEMPT_LEDGER path is required for the attempt limit.');
+  if (publicDemo && enableLive && attemptLimit === 0) throw new PocError('INVALID_CONFIG', 'Public live submissions require a positive persistent LIVE_HTTP_ATTEMPT_LIMIT.');
   if (enableLive && !clientId.trim()) throw new PocError('MISSING_MAPS_CLIENT_ID', 'Set AZURE_MAPS_CLIENT_ID before enabling live requests.');
-  return { host, port, platformHosted, requirePlatformAuth, enableLive, clientId, geography, attemptLimit, attemptLedgerPath, hostname: env.WEBSITE_HOSTNAME ?? '' };
+  return { host, port, platformHosted, requirePlatformAuth, publicDemo, enableLive, clientId, geography, attemptLimit, attemptLedgerPath, hostname: env.WEBSITE_HOSTNAME ?? '' };
 }
 
 /** @typedef {ReturnType<typeof readConfig>} Config */

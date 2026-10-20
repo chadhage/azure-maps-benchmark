@@ -2,6 +2,36 @@
 
 ## Status and scope
 
+### Public access policy (2026-10-20)
+
+The requested access policy is now public. Anyone with the URL may open the
+harness and submit single addresses or CSV batches without signing in.
+GitHub Actions applies `PUBLIC_DEMO=true`, `REQUIRE_PLATFORM_AUTH=false` and
+disables Easy Auth enforcement after deploying code. No local deployment or
+access-setting update is used. Release acceptance requires the Actions run and
+anonymous verification; earlier invite-only acceptance below is historical.
+
+All visitors share the existing persistent 30-HTTP-attempt allowance, including
+retries. It is not reset or increased. Public visitors can exhaust it; no per-user
+quota or abuse-resistant availability is promised. Same-origin checks prevent
+ordinary cross-site browser submission, not direct automated API clients.
+The app requires consent and validates uploads; submit only authorized data.
+Results are returned to the requesting browser, not a shared report history.
+
+Public mode permits non-loopback binding only on App Service and refuses live
+startup without a positive persistent cap. Keep one process/instance. The
+workflow requires the existing cap to be exactly 30 before changing access.
+Managed-identity Maps authentication and private vault connectivity remain.
+The login registration/group/credential are retained but not required for public
+use. Its credential expiry does not prevent anonymous access.
+
+To restore restricted access, review and change both the workflow and Bicep
+public-mode settings, restore the backend principal requirement and enable
+Easy Auth enforcement, then verify member/nonmember behavior. Changing only one
+layer does not establish restricted access.
+
+### Previous restricted-access verification
+
 The dedicated demo infrastructure and Entra prerequisites have been provisioned.
 The initial hosted callback 401 was traced to a missing login credential and a
 vault made private by inherited policy. The approved repair adds a dedicated
@@ -9,8 +39,8 @@ VNet, delegated App Service integration subnet, Key Vault private endpoint and
 private DNS. Vault public access stays disabled; no policy exception is used.
 The repair deployment succeeded on 2026-10-19. App Service reports its login
 credential reference as **Resolved**, health returns 200, and the user confirmed
-a fresh hosted sign-in loads the harness. Anonymous site/API requests still
-redirect to the configured tenant; the approved group restriction is unchanged.
+a fresh hosted sign-in loads the harness. At that time anonymous site/API
+requests redirected to the configured tenant and group restriction was enforced.
 Live was enabled with explicit user approval on 2026-10-20 UTC, keeping the
 shared 30-attempt limit and consent requirement. Live acceptance is not yet
 established; invitation emails have not been sent.
@@ -36,7 +66,7 @@ level. This is not a correctness/effectiveness evaluation; mocked tests and
 health checks are not substitutes for live acceptance.
 
 The current short-lived login credential expires **2026-10-26 06:15:23 UTC**.
-Rotate it before then or sign-in will fail again. The secret was stored directly
+Rotate it before then if restricted sign-in is needed again. The secret was stored directly
 in the dedicated Key Vault through an authenticated management resource request,
 without local secret files or deployment parameters.
 
@@ -52,7 +82,7 @@ The template targets an **existing resource group**. It creates:
 - B1 Linux App Service plan and Node 22 LTS web app with HTTPS/TLS and basic publishing credentials disabled.
 - System-assigned app identity with Azure Maps Data Reader scoped to this Maps account.
 - Key Vault Secrets User role on an existing RBAC-enabled authentication Key Vault.
-- Single-tenant Entra App Service authentication, restricted to one approved group; only `/healthz` is unauthenticated.
+- Optional single-tenant/group-restricted authentication when `publicDemo=false`; public mode disables the sign-in gate.
 - A $100 monthly resource-group cost budget with 80% and 100% email notifications.
 
 The budget is an alert only, **not a spending stop**. It does not prevent costs from exceeding $100, may be delayed, and does not replace a bounded Maps request plan or review of current agreement-specific pricing.
@@ -72,7 +102,7 @@ subnet. The `privatelink.vaultcore.azure.net` zone is linked only to this VNet.
 Linux App Service routes outbound traffic through the VNet so Key Vault
 references can resolve privately using its system identity. No inbound private
 endpoint is placed on the web app: users still reach the HTTPS site through
-tenant/group-restricted Easy Auth.
+the public URL; the retained Easy Auth configuration can be restored for restricted access.
 
 VNet integration requires Basic or higher; do not downgrade this plan to F1.
 The login credential is separate from Maps managed-identity access. Rotate it
@@ -82,7 +112,7 @@ parameters, logs or application packages. Verify the reference reports
 `Resolved`, then test a fresh interactive login; a health 200 is insufficient.
 Private endpoint/DNS and B1 hosting incur charges while the demo is idle.
 
-## Invite-only demo operations
+## Retained invite-only operations (not required for public access)
 
 Keep the approved email roster in ignored private configuration. Resolve each
 email to its exact Entra object, or create a B2B invitation where approved. Add
@@ -92,7 +122,7 @@ emails with a demo link until the endpoint and access policy are ready.
 Tenant cross-tenant access/consent policy can still require an administrator.
 
 The app registration has an exact HTTPS callback and SecurityGroup claims.
-Easy Auth requires a single-tenant login and the approved group. Test anonymous
+In restricted mode Easy Auth requires a single-tenant login and the approved group. Test anonymous
 and signed-in nonmember denial and an actual invitee's interactive sign-in;
 configuration inspection alone does not prove those user journeys.
 
@@ -188,13 +218,12 @@ The repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and
 secret or reuse the interactive sign-in registration. Do not use
 `pull_request_target` to run PR code with Azure permissions.
 
-The deployment only uploads the application ZIP: no Bicep provisioning, app
-setting/authentication changes, invitation operations or Maps calls. It does not
+The deployment uploads the application ZIP and applies the public access settings:
+no Bicep provisioning, invitation operations or Maps calls. It does not
 reset `/home/data/maps-demo-attempts.log` or expand the shared 30-attempt allowance.
-Post-deploy checks require health and denial of anonymous API access (401/403 or
-an HTTPS redirect to the same site's sign-in path or the exact approved Entra
-tenant/client/callback). They never follow sign-in redirects and do not prove
-invitee sign-in or Maps correctness.
+Post-deploy checks require health, anonymous page/config/sample GETs and a
+same-origin fixture POST with 16 results and zero Maps HTTP attempts. Redirects
+are rejected, not followed. These checks do not establish live Maps accuracy.
 
 `scripts/deploy.ps1 -Apply` fails before Azure operations. The azd provisioning
 and deployment hooks also reject the retired path. These are repository
@@ -294,9 +323,9 @@ after installation to pick up the new executable on PATH.
 After deployment:
 
 1. `/healthz` returns `{ "status": "ok", ... "mapsConnectivity": "not-checked" }`. This verifies process responsiveness only.
-2. An anonymous request to the site is redirected to Entra sign-in, and an unauthenticated API call is not usable.
-3. A real user in the approved group can sign in and use fixtures. A user outside the group cannot.
-4. Check that the Key Vault app-setting reference resolved, and allow for RBAC propagation. Test group overage cases with your tenant's identities.
+2. Anonymous page, config and sample requests return 200 without a sign-in redirect.
+3. An anonymous same-origin fixture submission returns a report; cross-origin submissions are rejected. In a private browser, confirm single/batch controls are usable within the remaining allowance.
+4. Inspect the actual attempt cap and remaining count. Do not reset the ledger. Retain the private Key Vault setup for restricted-access rollback.
 5. With data-owner approval, enable live mode in the approved parameter file and redeploy. Verify a small known labelled case and an independently verified no-match control.
 6. Confirm managed-identity Maps permissions, account uniqueId, intended geography, request counts and expected billing.
 7. Export evidence to an approved location. Do not automatically publish detailed case evidence or browser traces containing customer data.
@@ -306,8 +335,8 @@ No positive deployment/live verification is claimed until those steps are comple
 ## Local and hosted controls
 
 - Local server binds to loopback and rejects unexpected Host headers and cross-origin evaluation requests.
-- Non-loopback binding requires the App Service environment and platform-authentication mode. The application trusts the App Service-injected principal header **only behind App Service**; it is not a general authentication gateway for other hosts.
-- Hosted access relies on Easy Auth's principal/group validation; client-provided identity headers must never be trusted through an unrelated reverse proxy.
+- Non-loopback binding requires App Service with either enforced platform authentication or explicit public-demo mode. The application trusts the platform principal header only in restricted mode behind App Service.
+- Public mode has no user identity or per-user quota. Keep the durable shared cap, strict request validation and one-process deployment; it is not an internet-scale service.
 - Static routes are allowlisted; neither private data nor server source is served.
 - One active evaluation per process, maximum four concurrent case/strategy tasks, three HTTP attempts per trial, ten-second request timeout and thirty-second cumulative retry-delay budget.
 - HTTP 429/5xx and network failures may retry with exponential backoff/jitter. `Retry-After`/`x-ms-retry-after-ms` are honored. An excessive requested delay fails explicitly instead of retrying too early. Ordinary 4xx errors are not retried.
